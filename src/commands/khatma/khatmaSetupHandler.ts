@@ -18,7 +18,7 @@ const MODE_ORDER: KhatmaMode[] = ['custom', 'week', 'month', '3_months', '6_mont
 export async function handleKhatmaSetupInteraction(interaction: any) {
     const session = activeKhatmaSetups.get(interaction.user.id);
     if (!session || session.ownerId !== interaction.user.id) {
-        await interaction.reply({ content: '❌ انتهت جلسة الإعداد. استعمل `/khatma` من جديد.', flags: 64 });
+        await interaction.reply({ content: '❌ انتهت جلسة الإعداد. استعمل `/nakhtim` من جديد.', flags: 64 });
         return;
     }
     if (session.scope === 'guild' && interaction.guildId && session.guildId !== interaction.guildId) {

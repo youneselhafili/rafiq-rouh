@@ -136,7 +136,7 @@ npm start
 | `/setup_adhkar` | Configure randomized adhkar tied to prayer times |
 | `/setup_salawat` | Configure salawat reminders |
 | `/setup_jumuah` | Configure Friday reminders and Al-Kahf recitation |
-| `/khatma` | Configure a daily Quran reading plan (khatma) — per server or per user in DMs |
+| `/nakhtim` | Configure a daily Quran reading plan (khatma) — per server or per user in DMs |
 | `/setup_roles` | Configure custom mentionable roles |
 | `/setup_logs` | Configure bot audit/log channel |
 | `/setup_dm` | Publish the personal DM settings panel |

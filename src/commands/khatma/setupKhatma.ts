@@ -41,7 +41,7 @@ export interface KhatmaSetupSession {
 export const activeKhatmaSetups = new Map<string, KhatmaSetupSession>();
 
 export const data = new SlashCommandBuilder()
-    .setName('khatma')
+    .setName('nakhtim')
     .setDescription('إعداد ختمة القرآن الكريم اليومية')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
