@@ -16,7 +16,7 @@ import { sendAuditLog } from './auditLogService';
 import { logger } from '../utils/logger';
 import { isAdhanPlaybackActive } from './adhanAudioService';
 
-export type QuranMode = 'Idle' | 'Makkah' | 'Madinah' | 'Radio' | 'AudioLibrary' | 'Reciter';
+export type QuranMode = 'Idle' | 'QuranKareem' | 'Makkah' | 'Madinah' | 'Radio' | 'AudioLibrary' | 'Reciter';
 export type PlaybackMode = 'بالترتيب' | 'عشوائي' | 'اختيار يدوي' | 'Playlist' | 'سورة الكهف — الجمعة';
 
 export interface PlaylistTrack extends VoiceTrack {
@@ -355,6 +355,63 @@ async function automaticLiveKind(state: QuranRuntimeState): Promise<'makkah' | '
     return slot % 2 === 0 ? 'makkah' : 'madinah';
 }
 
+export function getAllReciterTracks(): PlaylistTrack[] {
+    const reciters = getAllReciters();
+    const tracks: PlaylistTrack[] = [];
+    for (const reciter of reciters) {
+        for (let i = 0; i < reciter.surahs.length; i++) {
+            const surah = reciter.surahs[i];
+            tracks.push({
+                url: surah.url,
+                title: surah.name,
+                subtitle: reciter.name,
+                reciterId: reciter.id,
+                surahIndex: i,
+            });
+        }
+    }
+    return tracks;
+}
+
+export async function startRandomQuranKareem(
+    client: Client,
+    state: QuranRuntimeState,
+    channel: VoiceBasedChannel,
+    isManual = true,
+): Promise<void> {
+    const allTracks = getAllReciterTracks();
+    if (allTracks.length === 0) return;
+
+    const randomTrack = allTracks[Math.floor(Math.random() * allTracks.length)];
+
+    state.mode = 'QuranKareem';
+    state.radioLabel = 'القرآن الكريم';
+    state.playbackMode = 'عشوائي';
+    state.phase = 'main';
+    if (isManual) state.userOverride = true;
+
+    await playTrackQueue(
+        channel,
+        [randomTrack],
+        0,
+        async (rawTrack, index, total) => {
+            const track = rawTrack as PlaylistTrack;
+            state.currentIndex = 0;
+            state.currentTrack = track;
+            await notifyNowPlaying(client, state, track, 0, 1);
+            await renderQuranPanel(client, state.guildId);
+        },
+        async () => {
+            const currentVoice = state.voiceChannelId ? channel.guild.channels.cache.get(state.voiceChannelId) : null;
+            if (currentVoice?.isVoiceBased() && (state.mode === 'QuranKareem' || state.twentyFourSeven)) {
+                await startRandomQuranKareem(client, state, currentVoice, false);
+            } else {
+                await finishPlayback(client, state);
+            }
+        },
+    );
+}
+
 async function finishPlayback(client: Client, state: QuranRuntimeState) {
     state.currentTrack = undefined;
     const guild = client.guilds.cache.get(state.guildId);
@@ -366,25 +423,24 @@ async function finishPlayback(client: Client, state: QuranRuntimeState) {
         return;
     }
 
-    const target = await automaticLiveKind(state);
-    await startLive(client, state, voiceChannel, target, false);
+    await startRandomQuranKareem(client, state, voiceChannel, false);
     const channel = await voiceTextChannel(client, state.voiceChannelId);
     if (!channel) return;
     const message = await sendVoiceChat(channel, {
         content: state.controllerId ? `<@${state.controllerId}>` : undefined,
         embeds: [new EmbedBuilder()
             .setColor(0x57f287)
-            .setTitle(RETURN_TO_LIVE_TITLE)
+            .setTitle('📖 العودة إلى القرآن الكريم')
             .setDescription(
-                `انتهت جميع السور المطلوبة، ورجعت الآن لتشغيل **${state.radioLabel}**.\n` +
-                'سأبقى داخل القناة الصوتية وأواصل البث المباشر.',
+                'انتهت السور المطلوبة، وعادت التلاوات العشوائية للقرآن الكريم.\n' +
+                'سأبقى داخل القناة الصوتية وأواصل البث 24/24.',
             )
             .setTimestamp()],
     }, true);
     if (message) state.nowPlayingMessageId = message.id;
     await sendAuditLog(client, state.guildId, {
-        level: 'info', system: 'Quran', action: 'Requests completed; live stream resumed', actorId: state.controllerId,
-        details: `${state.radioLabel} في <#${voiceChannel.id}>`,
+        level: 'info', system: 'Quran', action: 'Requests completed; Quran Kareem 24/7 resumed', actorId: state.controllerId,
+        details: `القرآن الكريم في <#${voiceChannel.id}>`,
     });
 }
 
@@ -875,22 +931,8 @@ export async function handleRadioInteractionV2(interaction: any) {
         if (!interaction.isButton()) return;
         await interaction.deferUpdate();
         const id = interaction.customId;
-        if (id === 'qr_btn_makkah' && vc) await startLive(interaction.client, state, vc, 'makkah');
-        else if (id === 'qr_btn_madinah' && vc) await startLive(interaction.client, state, vc, 'madinah');
-        else if (id === 'qr_btn_radio_saudi' && vc) {
-            const radio = getAllRadios().find(r => r.name.includes('السعودية'));
-            if (radio) {
-                state.mode = 'Radio'; state.radioLabel = radio.name; state.userOverride = true;
-                await clearNowPlayingNotification(interaction.client, state);
-                await playRadioSource(vc, radio.streamUrl, radio.name);
-            }
-        } else if (id === 'qr_btn_radio_sunnah' && vc) {
-            const radio = getAllRadios().find(r => r.name.includes('السنة'));
-            if (radio) {
-                state.mode = 'Radio'; state.radioLabel = radio.name; state.userOverride = true;
-                await clearNowPlayingNotification(interaction.client, state);
-                await playRadioSource(vc, radio.streamUrl, radio.name);
-            }
+        if (id === 'qr_btn_quran_kareem' && vc) {
+            await startRandomQuranKareem(interaction.client, state, vc, true);
         } else if (id === 'qr_btn_audio_library') {
             state.mode = 'AudioLibrary'; state.phase = 'main'; state.userOverride = true;
         } else if (id === 'qr_mode_ordered' && vc && state.selectedReciterId) {
@@ -1009,14 +1051,10 @@ export async function enforceQuran24Cycle(client: Client, guildId: string, force
         }
     }
     if (humans.size > 0 && state.userOverride && !force) return;
-    const cycleStart = new Date(await getCycleStart(guildId)).getTime();
-    const slot = Math.floor((Date.now() - cycleStart) / (6 * 60 * 60 * 1000));
-    const target: 'makkah' | 'madinah' = slot % 2 === 0 ? 'makkah' : 'madinah';
-    const targetMode = target === 'makkah' ? 'Makkah' : 'Madinah';
-    if (!force && state.mode === targetMode) return;
+    if (!force && state.mode === 'QuranKareem') return;
     state.controllerId = humans.first()?.id;
     state.userOverride = false;
-    await startLive(client, state, channel, target, false);
+    await startRandomQuranKareem(client, state, channel, false);
 }
 
 async function assignExistingController(client: Client, guildId: string): Promise<void> {

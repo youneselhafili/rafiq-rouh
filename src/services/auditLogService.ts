@@ -1,4 +1,4 @@
-﻿import { AttachmentBuilder, ChannelType, Client, ColorResolvable, EmbedBuilder } from 'discord.js';
+import { AttachmentBuilder, ChannelType, Client, ColorResolvable, EmbedBuilder } from 'discord.js';
 import { getAdvancedConfig, setAdvancedConfig } from './advancedConfigService';
 import { logger } from '../utils/logger';
 
@@ -128,11 +128,8 @@ const COMMAND_LABELS: Record<string, string> = {
 };
 
 const COMPONENT_LABELS: Record<string, string> = {
-    qr_btn_makkah: 'تشغيل الحرم المكي مباشر',
-    qr_btn_madinah: 'تشغيل المسجد النبوي مباشر',
+    qr_btn_quran_kareem: 'تشغيل القرآن الكريم 24/24',
     qr_btn_audio_library: 'فتح المكتبة الصوتية',
-    qr_btn_radio_saudi: 'تشغيل إذاعة القرآن السعودية',
-    qr_btn_radio_sunnah: 'تشغيل راديو السنة النبوية',
     qr_select_reciter: 'اختيار قارئ',
     qr_select_surah: 'اختيار سورة',
     qr_mode_ordered: 'التشغيل بالترتيب',

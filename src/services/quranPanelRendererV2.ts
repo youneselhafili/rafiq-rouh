@@ -7,10 +7,8 @@ import type { QuranRuntimeState } from './quranRadioServiceV2';
 export function buildQuranPanel(state: QuranRuntimeState) {
     const current = state.currentTrack
         ? `📖 **${state.currentTrack.title}**\n🎙️ ${state.currentTrack.subtitle || 'غير محدد'}`
-        : state.mode === 'Makkah' ? '🕋 بث الحرم المكي'
-            : state.mode === 'Madinah' ? '🕌 بث المسجد النبوي'
-                : state.mode === 'Radio' ? `📡 ${state.radioLabel || 'إذاعة مباشرة'}`
-                    : state.mode === 'AudioLibrary' ? '📚 اختر القارئ وطريقة التشغيل' : '⏸️ في انتظار الاختيار';
+        : state.mode === 'QuranKareem' ? '📖 القرآن الكريم (بث عشوائي 24/24)'
+            : state.mode === 'AudioLibrary' ? '📚 اختر القارئ وطريقة التشغيل' : '⏸️ في انتظار الاختيار';
 
     const embed = new EmbedBuilder()
         .setColor(0x2e8b57)
@@ -21,26 +19,25 @@ export function buildQuranPanel(state: QuranRuntimeState) {
             `🎵 **طريقة التشغيل:** ${state.playbackMode || 'عادي'}\n` +
             `📋 **المتبقي:** ${Math.max(0, state.queue.length - state.currentIndex - 1)}\n` +
             `🕐 **24/24:** ${state.twentyFourSeven ? '✅' : '❌'}\n\n` +
-            '🔴 **معلومة:** جميع الإذاعات هنا بث مباشر.',
+            '✨ **معلومة:** تشغيل القرآن الكريم يدور عشوائياً بين جميع القراء والتلاوات على مدار 24 ساعة.',
         )
         .setTimestamp();
 
     const sources = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId('qr_btn_makkah').setLabel('الحرم المكي').setEmoji('🕋').setStyle(state.mode === 'Makkah' ? ButtonStyle.Success : ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('qr_btn_madinah').setLabel('المسجد النبوي').setEmoji('🕌').setStyle(state.mode === 'Madinah' ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('qr_btn_quran_kareem').setLabel('القرآن الكريم').setEmoji('📖').setStyle(state.mode === 'QuranKareem' ? ButtonStyle.Success : ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('qr_btn_audio_library').setLabel('المكتبة الصوتية').setEmoji('📚').setStyle(['AudioLibrary', 'Reciter'].includes(state.mode) ? ButtonStyle.Success : ButtonStyle.Secondary),
     );
 
-    const secondRow = state.phase === 'choose_mode'
-        ? new ActionRowBuilder<ButtonBuilder>().addComponents(
+    const componentsList: ActionRowBuilder<any>[] = [sources];
+
+    if (state.phase === 'choose_mode') {
+        const modeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder().setCustomId('qr_mode_ordered').setLabel('بالترتيب').setEmoji('🔢').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('qr_mode_random').setLabel('عشوائي').setEmoji('🔀').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('qr_mode_manual').setLabel('اختيار سورة').setEmoji('📖').setStyle(ButtonStyle.Primary),
-        )
-        : new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder().setCustomId('qr_btn_radio_saudi').setLabel('إذاعة القرآن').setEmoji('🇸🇦').setStyle(state.mode === 'Radio' && state.radioLabel?.includes('السعودية') ? ButtonStyle.Success : ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('qr_btn_radio_sunnah').setLabel('راديو السنة').setEmoji('📡').setStyle(state.mode === 'Radio' && state.radioLabel?.includes('السنة') ? ButtonStyle.Success : ButtonStyle.Secondary),
         );
+        componentsList.push(modeRow);
+    }
 
     let selector: ActionRowBuilder<StringSelectMenuBuilder>;
     if (state.phase === 'choose_surah' && state.selectedReciterId) {
@@ -62,6 +59,7 @@ export function buildQuranPanel(state: QuranRuntimeState) {
                 .addOptions(reciters.map(r => ({ label: r.name, value: r.id, default: r.id === state.selectedReciterId }))),
         );
     }
+    componentsList.push(selector);
 
     const transport = state.phase === 'choose_surah'
         ? new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -73,13 +71,15 @@ export function buildQuranPanel(state: QuranRuntimeState) {
             new ButtonBuilder().setCustomId('qr_btn_prev').setLabel('السابق').setEmoji('⏮️').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('qr_btn_toggle_pause').setLabel(state.isPaused ? 'استئناف' : 'Pause').setEmoji(state.isPaused ? '▶️' : '⏸️').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('qr_btn_next').setLabel('التالي').setEmoji('⏭️').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('qr_btn_stop').setLabel('\u0625\u064a\u0642\u0627\u0641').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('qr_btn_stop').setLabel('إيقاف').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
         );
+    componentsList.push(transport);
 
     const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId('qr_playlist').setLabel('قائمتي').setEmoji('📋').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('qr_btn_refresh').setLabel('تحديث').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
     );
+    componentsList.push(actions);
 
-    return { embeds: [embed], components: [sources, secondRow, selector, transport, actions] };
+    return { embeds: [embed], components: componentsList };
 }

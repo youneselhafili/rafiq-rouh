@@ -78,7 +78,7 @@ export async function handleQuranSetupInteraction(interaction: any) {
         .setDescription(
             `🔊 **القناة:** <#${session.voiceChannelId}>\n` +
             `💬 **لوحة التحكم:** داخل محادثة نفس القناة\n` +
-            `🕐 **24/24:** ${session.twentyFourSeven ? '✅ مفعل — يبدأ بالحرم المكي' : '❌ متوقف'}\n\n` +
+            `🕐 **24/24:** ${session.twentyFourSeven ? '✅ مفعل — تشغيل عشوائي للقرآن الكريم' : '❌ متوقف'}\n\n` +
             'أول عضو يدخل القناة يحصل على التحكم، وعند خروجه ينتقل التحكم تلقائياً للعضو الذي بعده.'
         );
     await interaction.editReply({ embeds: [done], components: [] });
@@ -88,7 +88,7 @@ function buildEmbed(session: QuranSetupSession) {
     return new EmbedBuilder()
         .setColor(COLORS.QURAN)
         .setTitle('📻 إعداد نظام القرآن الكريم')
-        .setDescription('راجع الإعدادات ثم اضغط **حفظ**. لا يوجد مصدر افتراضي يدوي؛ وضع 24/24 يبدأ دائماً بالحرم المكي.')
+        .setDescription('راجع الإعدادات ثم اضغط **حفظ**. وضع 24/24 يشغل القرآن الكريم عشوائياً 24 ساعة.')
         .addFields(
             { name: '🔊 القناة الصوتية', value: session.voiceChannelId ? `<#${session.voiceChannelId}>` : 'لم يتم الاختيار', inline: true },
             { name: '🕐 وضع 24/24', value: session.twentyFourSeven ? '✅ مفعل' : '❌ متوقف', inline: true },

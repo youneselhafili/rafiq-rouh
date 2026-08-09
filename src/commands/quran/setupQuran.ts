@@ -40,7 +40,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         .setTitle('📻 إعداد نظام القرآن الكريم')
         .setDescription(
             'اختر القناة الصوتية التي سيعمل فيها البوت. لوحة التحكم ستظهر داخل محادثة نفس القناة، وأول عضو يدخلها يصبح المتحكم.\n\n' +
-            'وضع **24/24** يبدأ بالحرم المكي ثم يبدّل تلقائياً بين الحرم المكي والمسجد النبوي كل 6 ساعات.'
+            'وضع **24/24** يشغل القرآن الكريم عشوائياً بين جميع القراء على مدار 24 ساعة.'
         )
         .addFields(
             { name: '🔊 القناة الحالية', value: session.voiceChannelId ? `<#${session.voiceChannelId}>` : 'لم يتم الاختيار', inline: true },
