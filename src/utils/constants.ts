@@ -3,8 +3,8 @@ export const MP3QURAN_API = 'https://www.mp3quran.net/api/v3/reciters?language=a
 export const ALADHAN_API_BASE = 'https://api.aladhan.com/v1';
 
 // ─── Live Stream URLs (Haramain) ─────────────────────────────
-export const LIVE_MAKKAH_URL = 'https://win.holol.com/live/quran/playlist.m3u8';
-export const LIVE_MADINA_URL = 'https://win.holol.com/live/sunnah/playlist.m3u8';
+export const LIVE_MAKKAH_URL = 'http://m.live.net.sa:1935/live/quran/playlist.m3u8';
+export const LIVE_MADINA_URL = 'http://m.live.net.sa:1935/live/sunnah/playlist.m3u8';
 
 // ─── Embed Colors ────────────────────────────────────────────
 export const COLORS = {
