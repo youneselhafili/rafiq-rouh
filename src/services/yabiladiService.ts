@@ -78,7 +78,7 @@ export async function fetchYabiladiPrayerTimes(yabiladiId: number, slug: string)
         logger.warn(`⚠️ Could not find today's (${todayDay}/${todayMonth}) prayer times for ${slug}`);
         return null;
     } catch (error) {
-        logger.error(`Failed to fetch Yabiladi prayer times:`, error);
+        logger.error(`Failed to fetch Yabiladi prayer times: ${error instanceof Error ? error.message : String(error)}`);
         return null;
     }
 }

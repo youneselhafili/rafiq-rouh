@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import * as cron from 'node-cron';
 import moment from 'moment-timezone';
 import { AttachmentBuilder, Client, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
@@ -89,7 +89,7 @@ export async function fetchPrayerTimes(city: string, country: string, method?: n
         const hijri = response.data.data.date.hijri;
         return { timings: response.data.data.timings, hijriDate: `${hijri.day} ${hijri.month.ar} ${hijri.year} هـ` };
     } catch (error) {
-        logger.error(`Failed to fetch prayer times for ${city}, ${country}:`, error);
+        logger.error(`Failed to fetch prayer times for ${city}, ${country}: ${error instanceof Error ? error.message : String(error)}`);
         return null;
     }
 }
