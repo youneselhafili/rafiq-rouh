@@ -37,7 +37,7 @@ export interface KhatmaSetupSession {
     lastSentAt?: string;
     updatedAt?: string;
     deleteExpiresAt?: number;
-    resetExpiresAt?: number;
+    restartFromFirstPage?: boolean;
 }
 
 export const activeKhatmaSetups = new Map<string, KhatmaSetupSession>();
@@ -102,9 +102,9 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
             ...(session.mode === 'ramadan' ? [{ name: 'عدد الختمات', value: `${session.ramadanKhatmas}`, inline: true }] : []),
             { name: 'التقدم', value: `${Math.min(session.currentPage, 604)} / 604`, inline: true },
             ...(session.scope === 'guild' ? [{ name: 'القناة', value: session.channelId ? `<#${session.channelId}>` : '❌ لم يتم اختيار قناة', inline: false }] : []),
-            ...(session.resetExpiresAt && session.resetExpiresAt >= Date.now() ? [{
-                name: '⚠️ تأكيد إعادة التقدم',
-                value: 'اضغط **تأكيد الإعادة من الصفحة 1** خلال دقيقتين، ثم اضغط **حفظ** لتطبيق التغيير.',
+            ...(session.restartFromFirstPage ? [{
+                name: '🔄 إعادة التقدم',
+                value: 'تم ضبط التقدم على الصفحة 1. اضغط **حفظ** لإرسال الصفحة الأولى الآن.',
                 inline: false,
             }] : []),
         )
@@ -174,14 +174,10 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
             .setCustomId('khatma_setup_reset_progress')
-            .setLabel(session.resetExpiresAt && session.resetExpiresAt >= Date.now()
-                ? 'تأكيد الإعادة من الصفحة 1'
-                : 'إعادة من الصفحة 1')
+            .setLabel('إعادة من الصفحة 1')
             .setEmoji('🔄')
-            .setStyle(session.resetExpiresAt && session.resetExpiresAt >= Date.now()
-                ? ButtonStyle.Danger
-                : ButtonStyle.Secondary)
-            .setDisabled(session.currentPage <= 1 && !(session.resetExpiresAt && session.resetExpiresAt >= Date.now())),
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(session.currentPage <= 1 && !session.restartFromFirstPage),
         new ButtonBuilder()
             .setCustomId('khatma_setup_save')
             .setLabel('حفظ')

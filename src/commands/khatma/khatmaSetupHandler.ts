@@ -168,16 +168,9 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
     }
 
     if (id === 'khatma_setup_reset_progress') {
-        const now = Date.now();
-        if (!session.resetExpiresAt || session.resetExpiresAt < now) {
-            session.resetExpiresAt = now + 2 * 60 * 1000;
-            await interaction.update(buildKhatmaSetupPayload(session));
-            return;
-        }
-
         session.currentPage = 1;
         session.lastSentAt = undefined;
-        session.resetExpiresAt = undefined;
+        session.restartFromFirstPage = true;
         await interaction.update(buildKhatmaSetupPayload(session));
         return;
     }
@@ -241,6 +234,7 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
         await interaction.deferUpdate();
 
         const currentPage = session.currentPage > 604 ? 1 : session.currentPage;
+        const forceInitialDelivery = session.restartFromFirstPage === true;
         const now = new Date().toISOString();
         let nextPage = currentPage;
         let initialDelivery: 'sent' | 'already_sent' | 'failed' | 'stopped' = session.enabled ? 'failed' : 'stopped';
@@ -261,7 +255,7 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
             };
             await setGuildKhatma(session.guildId!, state);
             if (session.enabled) {
-                if (wasKhatmaSentToday(state.lastSentAt)) {
+                if (!forceInitialDelivery && wasKhatmaSentToday(state.lastSentAt)) {
                     initialDelivery = 'already_sent';
                 } else {
                     initialDelivery = await sendKhatmaPages(interaction.client, state) ? 'sent' : 'failed';
@@ -303,7 +297,7 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
                     createdAt: now,
                     updatedAt: now,
                 };
-                if (wasKhatmaSentToday(state.lastSentAt)) {
+                if (!forceInitialDelivery && wasKhatmaSentToday(state.lastSentAt)) {
                     initialDelivery = 'already_sent';
                 } else {
                     initialDelivery = await sendKhatmaPages(interaction.client, state) ? 'sent' : 'failed';
