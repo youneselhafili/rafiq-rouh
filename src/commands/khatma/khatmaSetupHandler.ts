@@ -167,6 +167,21 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
         return;
     }
 
+    if (id === 'khatma_setup_reset_progress') {
+        const now = Date.now();
+        if (!session.resetExpiresAt || session.resetExpiresAt < now) {
+            session.resetExpiresAt = now + 2 * 60 * 1000;
+            await interaction.update(buildKhatmaSetupPayload(session));
+            return;
+        }
+
+        session.currentPage = 1;
+        session.lastSentAt = undefined;
+        session.resetExpiresAt = undefined;
+        await interaction.update(buildKhatmaSetupPayload(session));
+        return;
+    }
+
     if (id === 'khatma_setup_cancel') {
         activeKhatmaSetups.delete(interaction.user.id);
         await interaction.update({ content: 'تم إلغاء الإعداد بدون حفظ.', embeds: [], components: [] });

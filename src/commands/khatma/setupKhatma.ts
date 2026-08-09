@@ -37,6 +37,7 @@ export interface KhatmaSetupSession {
     lastSentAt?: string;
     updatedAt?: string;
     deleteExpiresAt?: number;
+    resetExpiresAt?: number;
 }
 
 export const activeKhatmaSetups = new Map<string, KhatmaSetupSession>();
@@ -101,6 +102,11 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
             ...(session.mode === 'ramadan' ? [{ name: 'عدد الختمات', value: `${session.ramadanKhatmas}`, inline: true }] : []),
             { name: 'التقدم', value: `${Math.min(session.currentPage, 604)} / 604`, inline: true },
             ...(session.scope === 'guild' ? [{ name: 'القناة', value: session.channelId ? `<#${session.channelId}>` : '❌ لم يتم اختيار قناة', inline: false }] : []),
+            ...(session.resetExpiresAt && session.resetExpiresAt >= Date.now() ? [{
+                name: '⚠️ تأكيد إعادة التقدم',
+                value: 'اضغط **تأكيد الإعادة من الصفحة 1** خلال دقيقتين، ثم اضغط **حفظ** لتطبيق التغيير.',
+                inline: false,
+            }] : []),
         )
         .setFooter({ text: 'تُرسل أول دفعة بعد الحفظ، ثم يومياً الساعة 08:00 بتوقيت مكة' });
 
@@ -166,6 +172,16 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
             .setLabel('معاينة صفحة القرآن')
             .setEmoji('🖼️')
             .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId('khatma_setup_reset_progress')
+            .setLabel(session.resetExpiresAt && session.resetExpiresAt >= Date.now()
+                ? 'تأكيد الإعادة من الصفحة 1'
+                : 'إعادة من الصفحة 1')
+            .setEmoji('🔄')
+            .setStyle(session.resetExpiresAt && session.resetExpiresAt >= Date.now()
+                ? ButtonStyle.Danger
+                : ButtonStyle.Secondary)
+            .setDisabled(session.currentPage <= 1 && !(session.resetExpiresAt && session.resetExpiresAt >= Date.now())),
         new ButtonBuilder()
             .setCustomId('khatma_setup_save')
             .setLabel('حفظ')
