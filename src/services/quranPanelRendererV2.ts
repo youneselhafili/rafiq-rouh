@@ -24,7 +24,7 @@ export function buildQuranPanel(state: QuranRuntimeState) {
             `🕐 **24/24:** ${state.twentyFourSeven ? '✅' : '❌'}\n\n` +
             '✨ **معلومة:** تشغيل القرآن الكريم يدور عشوائياً بين جميع القراء والتلاوات على مدار 24 ساعة.',
         )
-        .setFooter({ text: 'Created by YOUNES ELHAFILI' })
+        .setFooter({ text: 'رفيق الروح • المطوّر: يونس الحافلي • قرآن 24/24' })
         .setTimestamp();
 
     const selectedReciter = allReciters.find(r => r.id === state.selectedReciterId);

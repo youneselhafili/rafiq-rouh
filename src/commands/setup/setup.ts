@@ -16,6 +16,7 @@ import { execute as setupLogs } from '../logs/setupLogs';
 import { execute as setupRoles } from '../roles/setupRoles';
 import { execute as setupDm } from '../dm/setupDm';
 import { UI_COLORS } from '../../utils/uiRenderer';
+import { buildCatalogSummary } from '../../services/botInfoService';
 
 const CHANNEL_SETUPS: Record<string, (interaction: any) => Promise<void>> = {
     adhan: setupAdhan,
@@ -52,6 +53,7 @@ function buildSetupChannelsPanel() {
         .addFields(
             { name: '🕌 العبادات والتذكير', value: 'الأذان • الأذكار • الصلاة على النبي ﷺ • الجمعة • الختمة', inline: false },
             { name: '📻 الصوت والإدارة', value: 'إذاعة القرآن • السجلات • الرتب • الرسائل الخاصة', inline: false },
+            { name: '📊 مكتبة القرآن', value: buildCatalogSummary(), inline: false },
         )
         .setFooter({ text: 'لوحة خاصة بك — اختَر نظامًا للمتابعة' });
 

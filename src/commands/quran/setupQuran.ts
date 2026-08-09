@@ -12,6 +12,7 @@ import {
 import { UI_COLORS } from '../../utils/uiRenderer';
 import { COLORS } from '../../utils/constants';
 import { getQuranRadioConfig } from '../../services/guildService';
+import { buildCatalogSummary } from '../../services/botInfoService';
 
 export interface QuranSetupSession {
     guildId: string;
@@ -45,6 +46,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
             'وضع **24/24** يشغل القرآن الكريم عشوائياً بين جميع القراء على مدار 24 ساعة.'
         )
         .addFields(
+            { name: '📊 المحتوى المتوفر', value: buildCatalogSummary(), inline: false },
             { name: '🔊 القناة الحالية', value: session.voiceChannelId ? `<#${session.voiceChannelId}>` : 'لم يتم الاختيار', inline: true },
             { name: '🕐 وضع 24/24', value: session.twentyFourSeven ? '✅ مفعل' : '❌ متوقف', inline: true },
         )

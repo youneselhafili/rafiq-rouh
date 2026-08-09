@@ -1,7 +1,7 @@
 {
   "name": "rafiq-el-rouh",
   "version": "0.1.0",
-  "description": "رفيق الروح - بوت إسلامي للقرآن الكريم والأذان والأذكار",
+  "description": "رفيق الروح - قرآن 24/24، أذان، أذكار، ختمات، جمعة وتنبيهات إسلامية شخصية",
   "main": "dist/src/index.js",
   "scripts": {
     "build": "node scripts/clean-dist.cjs && tsc",

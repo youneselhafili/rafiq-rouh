@@ -11,26 +11,38 @@ import { startKhatmaCron } from '../services/khatmaService';
 import { startDashboardApi } from '../services/dashboardApiService';
 import { acquirePrimaryRuntime } from '../services/runtimeLeadershipService';
 import { initDonateScheduler } from '../services/donateSchedulerService';
+import { buildApplicationDescription, getBotCatalogStats } from '../services/botInfoService';
 
 export const name = Events.ClientReady;
 export const once = true;
 
-async function ensureApplicationIcon(client: ExtendedClient): Promise<void> {
+async function ensureApplicationProfile(client: ExtendedClient): Promise<void> {
     try {
         const application = await client.application?.fetch();
         if (!application || !client.user) return;
-        if (application.icon) {
-            logger.info('Discord application icon is already configured.');
-            return;
+
+        const description = buildApplicationDescription();
+        const tags = ['قرآن', 'أذان', 'أذكار', 'ختمة', 'إسلامي'];
+        const updates: Parameters<typeof application.edit>[0] = {};
+
+        if (application.description !== description) updates.description = description;
+        if (JSON.stringify(application.tags || []) !== JSON.stringify(tags)) updates.tags = tags;
+
+        if (!application.icon) {
+            const avatarUrl = client.user.displayAvatarURL({ extension: 'png', size: 256 });
+            const response = await fetch(avatarUrl);
+            if (!response.ok) throw new Error(`Avatar download failed: HTTP ${response.status}`);
+            updates.icon = (globalThis as any).Buffer.from(await response.arrayBuffer());
         }
-        const avatarUrl = client.user.displayAvatarURL({ extension: 'png', size: 256 });
-        const response = await fetch(avatarUrl);
-        if (!response.ok) throw new Error(`Avatar download failed: HTTP ${response.status}`);
-        const icon = (globalThis as any).Buffer.from(await response.arrayBuffer());
-        await application.edit({ icon });
-        logger.success('Discord application icon synchronized with the bot avatar.');
+
+        if (Object.keys(updates).length) {
+            await application.edit(updates);
+            logger.success('Discord application bio, tags and icon synchronized.');
+        } else {
+            logger.info('Discord application profile is already up to date.');
+        }
     } catch (error) {
-        logger.warn(`Could not synchronize the Discord application icon: ${error instanceof Error ? error.message : String(error)}`);
+        logger.warn(`Could not synchronize the Discord application profile: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 export async function execute(client: ExtendedClient) {
@@ -45,11 +57,12 @@ export async function execute(client: ExtendedClient) {
     await deployCommands(client);
 
     // Discord activity cards use the application icon, not the bot avatar.
-    await ensureApplicationIcon(client);
+    await ensureApplicationProfile(client);
 
     // Set bot presence
+    const stats = getBotCatalogStats();
     client.user?.setActivity({
-        name: '\u0627\u0644\u0642\u0631\u0622\u0646 \u0627\u0644\u0643\u0631\u064a\u0645 | \u0631\u0641\u064a\u0642 \u0627\u0644\u0631\u0648\u062d',
+        name: `القرآن 24/24 • ${stats.reciters} قارئ | /how_to_use`,
         type: ActivityType.Listening,
     });
 
@@ -66,4 +79,3 @@ export async function execute(client: ExtendedClient) {
     initDonateScheduler(client);
     logger.success('Background jobs initialized.');
 }
-

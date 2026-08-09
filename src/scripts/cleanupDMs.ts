@@ -4,6 +4,7 @@ import { initializeFirebase } from '../config/firebase';
 import { isFirestoreAvailable } from '../services/guildConfigService';
 import { getAllDMUserConfigs } from '../services/dmSubscriptionService';
 import { logger } from '../utils/logger';
+import { buildCatalogSummary } from '../services/botInfoService';
 
 dotenv.config();
 
@@ -89,8 +90,8 @@ async function run() {
                             {
                                 name: '🌙  عن البوت',
                                 value:
-                                    'رفيق الروح بوت إسلامي مجاني بالكامل — آذان، أذكار، وقوائم تشغيل (Playlists) مجمعة لأشهر القراء لتشغيل القرآن الكريم بشكل عشوائي ومستمر.\n' +
-                                    'وجاري العمل حالياً على إضافة مجموعة جديدة ومميزة من كبار القراء قريباً بمشيئة الله.',
+                                    'رفيق الروح بوت إسلامي مجاني بالكامل: قرآن 24/24، أذان ومواقيت الصلاة، أذكار، صلاة على النبي ﷺ، الجمعة وسورة الكهف، ختمات يومية وتنبيهات شخصية في الخاص.\n' +
+                                    `${buildCatalogSummary()}.`,
                                 inline: false,
                             },
                             {

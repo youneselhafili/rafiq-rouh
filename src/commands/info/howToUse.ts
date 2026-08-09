@@ -3,6 +3,7 @@ import {
     EmbedBuilder,
     SlashCommandBuilder,
 } from 'discord.js';
+import { buildCatalogSummary } from '../../services/botInfoService';
 
 const BRAND_COLOR = 0xD8AA4D;
 
@@ -10,14 +11,18 @@ export const data = new SlashCommandBuilder()
     .setName('how_to_use')
     .setDescription('دليل كامل لجميع أوامر رفيق الروح وطريقة استعمالها');
 
-export async function execute(interaction: ChatInputCommandInteraction) {
+export function buildHowToUseEmbeds() {
     const overview = new EmbedBuilder()
         .setColor(BRAND_COLOR)
         .setTitle('📖 دليل استعمال رفيق الروح')
         .setDescription(
-            'هذا الدليل يشرح جميع أوامر النسخة الحالية من A إلى Z. ابدأ بـ `/setup_channels` لفتح لوحة الإعداد الموحدة، أو استعمل أي أمر مباشر من الصفحات التالية.'
+            'رفيق الروح بوت إسلامي مجاني للقرآن والأذان والأذكار والختمات وتنبيهات الجمعة والرسائل الخاصة. هذا الدليل يشرح جميع أوامر النسخة الحالية من A إلى Z.'
         )
         .addFields(
+            {
+                name: '📊 مكتبة القرآن الكريم',
+                value: `${buildCatalogSummary()}\nتشغيل عشوائي مستمر 24/24، أو اختيار القارئ والسورة وطريقة التشغيل.`,
+            },
             {
                 name: '👤 أوامر متاحة للجميع',
                 value: '`/donate` • `/how_to_use` • `/setup_dm`\nيمكن لكل عضو فتح لوحة الخاص وإعداد تنبيهاته الشخصية بدون تغيير إعدادات السيرفر.',
@@ -102,5 +107,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         .setFooter({ text: 'رفيق الروح • المطوّر: يونس الحافلي • جزاكم الله خيراً ❤️' })
         .setTimestamp();
 
-    await interaction.reply({ embeds: [overview, commandsAtoN, setupCommands], flags: 64 });
+    return [overview, commandsAtoN, setupCommands];
+}
+
+export async function execute(interaction: ChatInputCommandInteraction) {
+    await interaction.reply({ embeds: buildHowToUseEmbeds(), flags: 64 });
 }

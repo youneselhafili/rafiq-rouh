@@ -21,6 +21,7 @@ import {
 } from './guildService';
 import { isFirestoreAvailable } from './guildConfigService';
 import { getAllDMUserConfigs } from './dmSubscriptionService';
+import { buildCatalogSummary } from './botInfoService';
 
 const PAYPAL_URL = 'https://www.paypal.com/paypalme/youneselhafili';
 const CIH_RIB = '230450524541421101740066';
@@ -279,8 +280,8 @@ function buildDonateEmbed(client: Client, title: string): EmbedBuilder {
             {
                 name: '🌙  عن البوت',
                 value:
-                    'رفيق الروح بوت إسلامي مجاني بالكامل — آذان، أذكار، وقوائم تشغيل (Playlists) مجمعة لأشهر القراء لتشغيل القرآن الكريم بشكل عشوائي ومستمر.\n' +
-                    'وجاري العمل حالياً على إضافة مجموعة جديدة ومميزة من كبار القراء قريباً بمشيئة الله.',
+                    'رفيق الروح بوت إسلامي مجاني بالكامل: قرآن 24/24، أذان ومواقيت الصلاة، أذكار، صلاة على النبي ﷺ، الجمعة وسورة الكهف، ختمات يومية وتنبيهات شخصية في الخاص.\n' +
+                    `${buildCatalogSummary()}.`,
                 inline: false,
             },
             {
