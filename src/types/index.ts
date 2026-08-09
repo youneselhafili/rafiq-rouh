@@ -83,9 +83,12 @@ export interface GuildSettings {
     salawat: GuildSalawatConfig[];
     quranRadio: GuildQuranRadioConfig | null;
     donate: GuildDonateConfig | null;
+    lastDonateBroadcastAt?: string;
+    firstDonateBroadcastSent?: boolean;
     createdAt: string;
     updatedAt: string;
 }
+
 
 // ─── Catalog Types ────────────────────────────────────────────
 

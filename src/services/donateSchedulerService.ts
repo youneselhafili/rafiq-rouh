@@ -1,4 +1,4 @@
-import {
+﻿import {
     Client,
     TextChannel,
     EmbedBuilder,
@@ -13,7 +13,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from '../utils/logger';
-import { getGuildDonateConfig } from './guildService';
+import {
+    getGuildDonateConfig,
+    getGuildAdhkarConfigs,
+    getGuildDonateTracking,
+    saveGuildDonateTracking
+} from './guildService';
 import { isFirestoreAvailable } from './guildConfigService';
 import { getAllDMUserConfigs } from './dmSubscriptionService';
 
@@ -21,11 +26,11 @@ const PAYPAL_URL = 'https://www.paypal.com/paypalme/youneselhafili';
 const CIH_RIB = '230450524541421101740066';
 const GLOBAL_DONATE_FILE = path.join(process.cwd(), 'data', 'global_donate_state.json');
 
-// Store last broadcast times to prevent multiple sends on restarts
+// Store last local broadcast times to prevent multiple sends on restarts
 const lastBroadcasts = new Map<string, string>(); // guildId -> dateKey
 
 interface GlobalDonateState {
-    lastGlobalBroadcast?: string; // ISO string
+    lastGlobalDMVerify?: string; // ISO string
 }
 
 async function getGlobalDonateState(): Promise<GlobalDonateState> {
@@ -34,7 +39,7 @@ async function getGlobalDonateState(): Promise<GlobalDonateState> {
             const snap = await getFirestore().doc('globals/donate').get();
             if (snap.exists) {
                 const data = snap.data();
-                return { lastGlobalBroadcast: data?.lastGlobalBroadcast };
+                return { lastGlobalDMVerify: data?.lastGlobalDMVerify };
             }
         } catch (error) {
             logger.error('Failed to get global donate state from Firestore:', error);
@@ -43,7 +48,8 @@ async function getGlobalDonateState(): Promise<GlobalDonateState> {
 
     try {
         if (fs.existsSync(GLOBAL_DONATE_FILE)) {
-            return JSON.parse(fs.readFileSync(GLOBAL_DONATE_FILE, 'utf-8'));
+            const raw = JSON.parse(fs.readFileSync(GLOBAL_DONATE_FILE, 'utf-8'));
+            return { lastGlobalDMVerify: raw.lastGlobalDMVerify };
         }
     } catch {
         // ignore
@@ -55,7 +61,7 @@ async function saveGlobalDonateState(state: GlobalDonateState): Promise<void> {
     if (isFirestoreAvailable()) {
         try {
             await getFirestore().doc('globals/donate').set({
-                lastGlobalBroadcast: state.lastGlobalBroadcast || new Date().toISOString(),
+                lastGlobalDMVerify: state.lastGlobalDMVerify || new Date().toISOString(),
                 updatedAt: FieldValue.serverTimestamp()
             }, { merge: true });
             return;
@@ -78,12 +84,13 @@ async function saveGlobalDonateState(state: GlobalDonateState): Promise<void> {
 export function initDonateScheduler(client: Client) {
     logger.info('⚙️ Initializing Donate Auto Broadcast Scheduler...');
 
-    // Run cron job once every day at 12:00 PM to check both guild schedules and the 91-day global broadcast
+    // Run cron job once every day at 12:00 PM to check both individual guild timers, manual schedules, and DM broadcasts
     cron.schedule('0 12 * * *', async () => {
         try {
             const now = new Date();
-            await checkAndRunGlobalBroadcast(client, now);
+            await checkAndRunServerTimers(client, now);
             await checkAndRunGuildBroadcasts(client, now);
+            await checkAndRunDMGlobalBroadcast(client, now);
         } catch (error) {
             logger.error('Error in Donate scheduler cron job:', error);
         }
@@ -93,22 +100,138 @@ export function initDonateScheduler(client: Client) {
     setTimeout(async () => {
         try {
             const now = new Date();
-            await checkAndRunGlobalBroadcast(client, now);
+            await checkAndRunServerTimers(client, now);
+            await checkAndRunDMGlobalBroadcast(client, now);
         } catch (error) {
             logger.error('Error in Donate startup scheduler run:', error);
         }
     }, 30000);
 }
 
-async function checkAndRunGlobalBroadcast(client: Client, now: Date) {
+/**
+ * Handles individual server timeline logic:
+ * - Sends 1st broadcast after 7 days of server configuration creation.
+ * - Sends subsequent broadcasts every 91 days.
+ */
+async function checkAndRunServerTimers(client: Client, now: Date) {
+    logger.info('🔍 Checking individual server donation timelines...');
+    const guilds = client.guilds.cache;
+
+    for (const [guildId, guild] of guilds) {
+        try {
+            const tracking = await getGuildDonateTracking(guildId);
+            const diffTime = Math.abs(now.getTime() - tracking.createdAt.getTime());
+            const daysWorking = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+            if (daysWorking < 7) {
+                // Too new, skip
+                continue;
+            }
+
+            let shouldBroadcast = false;
+
+            if (!tracking.firstSent) {
+                // 7 days completed, trigger first broadcast
+                shouldBroadcast = true;
+            } else if (tracking.lastSentAt) {
+                // Check if 91 days have passed since last broadcast
+                const lastSent = new Date(tracking.lastSentAt);
+                const daysSinceLast = Math.floor(Math.abs(now.getTime() - lastSent.getTime()) / (1000 * 60 * 60 * 24));
+                if (daysSinceLast >= 91) {
+                    shouldBroadcast = true;
+                }
+            }
+
+            if (shouldBroadcast) {
+                // Find appropriate channel: Configured channel -> Dhikr (Adhkar) Channel -> First Writeable Text Channel
+                let targetChannelId: string | undefined;
+
+                const config = await getGuildDonateConfig(guildId);
+                if (config?.enabled && config?.channelId) {
+                    targetChannelId = config.channelId;
+                }
+
+                if (!targetChannelId) {
+                    const adhkarConfigs = await getGuildAdhkarConfigs(guildId);
+                    if (adhkarConfigs && adhkarConfigs.length > 0 && adhkarConfigs[0].channelId) {
+                        targetChannelId = adhkarConfigs[0].channelId;
+                    }
+                }
+
+                if (!targetChannelId) {
+                    const writeableChannel = guild.channels.cache.find(c =>
+                        c.type === ChannelType.GuildText &&
+                        c.permissionsFor(guild.members.me || '')?.has(PermissionFlagsBits.SendMessages)
+                    );
+                    if (writeableChannel) {
+                        targetChannelId = writeableChannel.id;
+                    }
+                }
+
+                if (targetChannelId) {
+                    const titleText = !tracking.firstSent 
+                        ? '📢 مرحباً بكم! تذكير دوري لـ رفيق الروح' 
+                        : '📢 تذكير دوري لـ رفيق الروح';
+                    
+                    await sendDonationBroadcast(client, targetChannelId, titleText);
+                    
+                    // Save new state
+                    await saveGuildDonateTracking(guildId, {
+                        firstSent: true,
+                        lastSentAt: now.toISOString(),
+                    });
+                }
+            }
+        } catch (error) {
+            logger.error(`Error executing server timer check for guild ${guildId}:`, error);
+        }
+    }
+}
+
+/**
+ * Handles manual schedules configured by admins (daily, weekly, monthly)
+ */
+async function checkAndRunGuildBroadcasts(client: Client, now: Date) {
+    const guilds = client.guilds.cache;
+    const dateStr = now.toDateString();
+
+    for (const [guildId, guild] of guilds) {
+        try {
+            const config = await getGuildDonateConfig(guildId);
+            if (!config || !config.enabled || !config.channelId) continue;
+
+            const taskKey = `${guildId}-${config.interval}-${dateStr}`;
+
+            let shouldBroadcast = false;
+            if (config.interval === 'daily') {
+                shouldBroadcast = true;
+            } else if (config.interval === 'weekly' && now.getDay() === 5) {
+                shouldBroadcast = true;
+            } else if (config.interval === 'monthly' && now.getDate() === 1) {
+                shouldBroadcast = true;
+            }
+
+            if (shouldBroadcast && !lastBroadcasts.has(taskKey)) {
+                lastBroadcasts.set(taskKey, dateStr);
+                await sendDonationBroadcast(client, config.channelId, '💝 تذكير دوري لدعم البوت');
+            }
+        } catch (error) {
+            logger.error(`Error checking guild manual broadcast for ${guildId}:`, error);
+        }
+    }
+}
+
+/**
+ * Handles global DM broadcast to all active DM subscribers every 91 days
+ */
+async function checkAndRunDMGlobalBroadcast(client: Client, now: Date) {
     const state = await getGlobalDonateState();
     let shouldBroadcast = false;
 
-    if (!state.lastGlobalBroadcast) {
-        // First time ever, run it and initialize
+    if (!state.lastGlobalDMVerify) {
         shouldBroadcast = true;
     } else {
-        const lastDate = new Date(state.lastGlobalBroadcast);
+        const lastDate = new Date(state.lastGlobalDMVerify);
         const diffTime = Math.abs(now.getTime() - lastDate.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         if (diffDays >= 91) {
@@ -118,35 +241,8 @@ async function checkAndRunGlobalBroadcast(client: Client, now: Date) {
 
     if (!shouldBroadcast) return;
 
-    logger.info('📢 Triggering 91-day Global Donation Broadcast to all servers and DMs...');
+    logger.info('📢 Triggering 91-day Global Donation DM Broadcast...');
 
-    // 1. Broadcast to all guilds (servers)
-    const guilds = client.guilds.cache;
-    for (const [guildId, guild] of guilds) {
-        try {
-            // Check if guild has configured channel, otherwise find first writeable text channel
-            const config = await getGuildDonateConfig(guildId);
-            let targetChannelId = config?.channelId;
-
-            if (!targetChannelId) {
-                const writeableChannel = guild.channels.cache.find(c =>
-                    c.type === ChannelType.GuildText &&
-                    c.permissionsFor(guild.members.me || '')?.has(PermissionFlagsBits.SendMessages)
-                );
-                if (writeableChannel) {
-                    targetChannelId = writeableChannel.id;
-                }
-            }
-
-            if (targetChannelId) {
-                await sendDonationBroadcast(client, targetChannelId, '📢 تذكير دوري لـ رفيق الروح');
-            }
-        } catch (guildError) {
-            logger.error(`Failed to send global broadcast to guild ${guildId}:`, guildError);
-        }
-    }
-
-    // 2. Broadcast to all users in DMs who have active DM configs
     if (isFirestoreAvailable()) {
         try {
             const userConfigs = await getAllDMUserConfigs();
@@ -168,41 +264,8 @@ async function checkAndRunGlobalBroadcast(client: Client, now: Date) {
         }
     }
 
-    // Update global state
-    await saveGlobalDonateState({ lastGlobalBroadcast: now.toISOString() });
-    logger.success('✅ 91-day Global Donation Broadcast completed successfully.');
-}
-
-async function checkAndRunGuildBroadcasts(client: Client, now: Date) {
-    const guilds = client.guilds.cache;
-    const dateStr = now.toDateString();
-
-    for (const [guildId, guild] of guilds) {
-        try {
-            const config = await getGuildDonateConfig(guildId);
-            if (!config || !config.enabled || !config.channelId) continue;
-
-            const taskKey = `${guildId}-${config.interval}-${dateStr}`;
-
-            let shouldBroadcast = false;
-            if (config.interval === 'daily') {
-                shouldBroadcast = true;
-            } else if (config.interval === 'weekly' && now.getDay() === 5) {
-                // Send weekly on Fridays
-                shouldBroadcast = true;
-            } else if (config.interval === 'monthly' && now.getDate() === 1) {
-                // Send monthly on the 1st of the month
-                shouldBroadcast = true;
-            }
-
-            if (shouldBroadcast && !lastBroadcasts.has(taskKey)) {
-                lastBroadcasts.set(taskKey, dateStr);
-                await sendDonationBroadcast(client, config.channelId, '💝 تذكير دوري لدعم البوت');
-            }
-        } catch (error) {
-            logger.error(`Error checking guild broadcast for ${guildId}:`, error);
-        }
-    }
+    await saveGlobalDonateState({ lastGlobalDMVerify: now.toISOString() });
+    logger.success('✅ 91-day Global DM Broadcast completed successfully.');
 }
 
 function buildDonateEmbed(client: Client, title: string): EmbedBuilder {
@@ -239,7 +302,7 @@ function buildDonateEmbed(client: Client, title: string): EmbedBuilder {
         )
         .setThumbnail(client.user?.displayAvatarURL() ?? null)
         .setFooter({
-            text: 'رفيق الروح • المطوّر: يونس الحفيلي  •  جزاكم الله خيراً ❤️',
+            text: 'رفيق الروح • المطوّر: YOUNES ELHAFILI  •  جزاكم الله خيراً ❤️',
             iconURL: client.user?.displayAvatarURL(),
         })
         .setTimestamp();

@@ -539,3 +539,56 @@ export async function deleteDonateConfig(guildId: string): Promise<void> {
     logger.info(`Donate config deleted locally for guild ${guildId}`);
 }
 
+export async function saveGuildDonateTracking(
+    guildId: string,
+    tracking: { firstSent: boolean; lastSentAt: string }
+): Promise<void> {
+    if (isFirestoreAvailable()) {
+        const { getFirestore, FieldValue } = await import('firebase-admin/firestore');
+        const db = getFirestore();
+        await db.doc(`guilds/${guildId}/donateConfig/default`).set({
+            firstSent: tracking.firstSent,
+            lastSentAt: tracking.lastSentAt,
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+        logger.info(`Donate tracking saved via Firestore for guild ${guildId}`);
+        return;
+    }
+
+    const guild = getOrCreateGuild(guildId);
+    guild.firstDonateBroadcastSent = tracking.firstSent;
+    guild.lastDonateBroadcastAt = tracking.lastSentAt;
+    writeGuild(guild);
+    logger.info(`Donate tracking saved locally for guild ${guildId}`);
+}
+
+export async function getGuildDonateTracking(
+    guildId: string
+): Promise<{ firstSent: boolean; lastSentAt?: string; createdAt: Date }> {
+    if (isFirestoreAvailable()) {
+        const { getFirestore } = await import('firebase-admin/firestore');
+        const db = getFirestore();
+        const docSnap = await db.doc(`guilds/${guildId}/donateConfig/default`).get();
+        const guildSnap = await db.doc(`guilds/${guildId}`).get();
+        
+        const data = docSnap.exists ? docSnap.data() : null;
+        const createdAt = guildSnap.exists && guildSnap.createTime 
+            ? guildSnap.createTime.toDate() 
+            : new Date();
+
+        return {
+            firstSent: data?.firstSent || false,
+            lastSentAt: data?.lastSentAt,
+            createdAt,
+        };
+    }
+
+    const guild = getOrCreateGuild(guildId);
+    return {
+        firstSent: guild.firstDonateBroadcastSent || false,
+        lastSentAt: guild.lastDonateBroadcastAt,
+        createdAt: guild.createdAt ? new Date(guild.createdAt) : new Date(),
+    };
+}
+
+

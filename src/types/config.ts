@@ -45,7 +45,10 @@ export interface DonateConfigDoc {
     enabled: boolean;
     channelId: string;
     interval: 'daily' | 'weekly' | 'monthly';
+    lastSentAt?: string;
+    firstSent?: boolean;
     updatedAt: Timestamp | null;
 }
+
 
 
