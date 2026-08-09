@@ -7,10 +7,12 @@ import { PRAYER_NAMES } from '../utils/constants';
 const cairoFontPath = path.resolve(process.cwd(), 'assets/fonts/Cairo-Bold.ttf');
 const tajawalRegPath = path.resolve(process.cwd(), 'assets/fonts/Tajawal-Regular.ttf');
 const tajawalBoldPath = path.resolve(process.cwd(), 'assets/fonts/Tajawal-Bold.ttf');
+const notoEmojiPath = path.resolve(process.cwd(), 'assets/fonts/NotoEmoji-Regular.ttf');
 
 if (fs.existsSync(cairoFontPath)) GlobalFonts.registerFromPath(cairoFontPath, 'Cairo');
 if (fs.existsSync(tajawalRegPath)) GlobalFonts.registerFromPath(tajawalRegPath, 'Tajawal');
 if (fs.existsSync(tajawalBoldPath)) GlobalFonts.registerFromPath(tajawalBoldPath, 'Tajawal-Bold');
+if (fs.existsSync(notoEmojiPath)) GlobalFonts.registerFromPath(notoEmojiPath, 'NotoEmoji');
 
 const CANVAS_WIDTH = 1200;
 const CANVAS_HEIGHT = 630;
@@ -135,22 +137,22 @@ export async function generateAdhanImage(
 
     // "حان الآن موعد أذان"
     ctx.fillStyle = '#64ffda'; // Mint green
-    ctx.font = '35px Tajawal';
+    ctx.font = '35px Tajawal, NotoEmoji';
     ctx.fillText('حان الآن موعد أذان', CANVAS_WIDTH / 2, 130);
 
     // Prayer name
     ctx.fillStyle = '#D4AF37';
-    ctx.font = '80px Cairo';
+    ctx.font = '80px Cairo, NotoEmoji';
     ctx.fillText(arabicPrayer, CANVAS_WIDTH / 2, 210);
 
     // Prayer time — white, large
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 65px Tajawal-Bold';
+    ctx.font = 'bold 65px Tajawal-Bold, NotoEmoji';
     ctx.fillText(prayerTime, CANVAS_WIDTH / 2, 290);
 
     // City + country
     ctx.fillStyle = '#b0c4de';
-    ctx.font = '28px Tajawal';
+    ctx.font = '28px Tajawal, NotoEmoji';
     ctx.fillText(`📍 ${cityName} — ${country}`, CANVAS_WIDTH / 2, 350);
 
     // Decorative separator
@@ -163,7 +165,7 @@ export async function generateAdhanImage(
 
     // Verse
     ctx.fillStyle = '#e0e8f0';
-    ctx.font = '33px Cairo';
+    ctx.font = '33px Cairo, NotoEmoji';
     const verseLines = wrapText(ctx, `﴿${verseText}﴾`, CANVAS_WIDTH * 0.85);
     let vY = 430;
     for (const line of verseLines) {
@@ -173,7 +175,7 @@ export async function generateAdhanImage(
 
     // Verse Reference
     ctx.fillStyle = '#D4AF37';
-    ctx.font = '22px Tajawal';
+    ctx.font = '22px Tajawal, NotoEmoji';
     ctx.fillText(verseReference, CANVAS_WIDTH / 2, vY);
 
     // Bottom decorative line
@@ -230,21 +232,21 @@ export async function generateAdhanWarningImage(
 
     // Title
     ctx.fillStyle = '#f59e0b'; // Amber
-    ctx.font = '30px Tajawal';
+    ctx.font = '30px Tajawal, NotoEmoji';
     ctx.fillText('تذكير باقتراب الأذان', CANVAS_WIDTH / 2, 90);
 
     // Message
     ctx.fillStyle = '#ffffff';
-    ctx.font = '55px Cairo';
+    ctx.font = '55px Cairo, NotoEmoji';
     ctx.fillText(`تبقى 5 دقائق على رفع أذان ${arabicPrayerName}`, CANVAS_WIDTH / 2, 170);
 
     // Location & Time
     ctx.fillStyle = '#fcd34d'; // Lighter amber
-    ctx.font = 'bold 35px Tajawal-Bold';
+    ctx.font = 'bold 35px Tajawal-Bold, NotoEmoji';
     ctx.fillText(`⏰ ${prayerTime}`, CANVAS_WIDTH / 2, 250);
 
     ctx.fillStyle = '#d4d4d8';
-    ctx.font = '25px Tajawal';
+    ctx.font = '25px Tajawal, NotoEmoji';
     ctx.fillText(`📍 ${cityNameAr} — ${countryAr}`, CANVAS_WIDTH / 2, 310);
 
     return canvas.toBuffer('image/png');
@@ -276,11 +278,11 @@ export async function generatePrayerCard(
     ctx.textBaseline = 'middle';
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '60px Cairo';
+    ctx.font = '60px Cairo, NotoEmoji';
     ctx.fillText('مواقيت الصلاة', CANVAS_WIDTH / 2, 100);
 
     ctx.fillStyle = '#d4d4d8';
-    ctx.font = '30px Tajawal';
+    ctx.font = '30px Tajawal, NotoEmoji';
     ctx.fillText(`📍 مدينة ${cityName}`, CANVAS_WIDTH / 2, 160);
 
     const startX = 150;
@@ -304,11 +306,11 @@ export async function generatePrayerCard(
         ctx.fill();
 
         ctx.fillStyle = '#D4AF37';
-        ctx.font = '30px Tajawal';
+        ctx.font = '30px Tajawal, NotoEmoji';
         ctx.fillText(prayer.name, x, yPos - 30);
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 35px Tajawal-Bold';
+        ctx.font = 'bold 35px Tajawal-Bold, NotoEmoji';
         ctx.fillText(prayer.time, x, yPos + 30);
     });
 
@@ -342,11 +344,11 @@ export async function generateJumuahImage(quote: string): Promise<any> {
     ctx.textBaseline = 'middle';
 
     ctx.fillStyle = '#D4AF37';
-    ctx.font = '70px Cairo';
+    ctx.font = '70px Cairo, NotoEmoji';
     ctx.fillText('جمعة مباركة', CANVAS_WIDTH / 2, 180);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '40px Tajawal';
+    ctx.font = '40px Tajawal, NotoEmoji';
     const lines = wrapText(ctx, quote, CANVAS_WIDTH - 300);
     const lineHeight = 60;
 
@@ -385,11 +387,11 @@ export async function generateJumuahKahfImage(quote: string, reciterName: string
     ctx.direction = 'rtl';
 
     ctx.fillStyle = '#e8d28a';
-    ctx.font = '30px Tajawal-Bold';
+    ctx.font = '30px Tajawal-Bold, NotoEmoji';
     ctx.fillText('تلاوة يوم الجمعة', CANVAS_WIDTH / 2, 105);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '84px Cairo';
+    ctx.font = '84px Cairo, NotoEmoji';
     ctx.fillText('سورة الكهف', CANVAS_WIDTH / 2, 205);
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
@@ -398,14 +400,14 @@ export async function generateJumuahKahfImage(quote: string, reciterName: string
     ctx.fill();
 
     ctx.fillStyle = '#D4AF37';
-    ctx.font = '27px Tajawal-Bold';
+    ctx.font = '27px Tajawal-Bold, NotoEmoji';
     ctx.fillText('القارئ', CANVAS_WIDTH / 2, 300);
     ctx.fillStyle = '#ffffff';
-    ctx.font = '38px Tajawal-Bold';
+    ctx.font = '38px Tajawal-Bold, NotoEmoji';
     ctx.fillText(reciterName, CANVAS_WIDTH / 2, 340);
 
     ctx.fillStyle = '#e7eee9';
-    ctx.font = '29px Tajawal';
+    ctx.font = '29px Tajawal, NotoEmoji';
     const lines = wrapText(ctx, quote, CANVAS_WIDTH - 250).slice(0, 3);
     const lineHeight = 43;
     let y = 440 - ((lines.length - 1) * lineHeight) / 2;
@@ -415,7 +417,7 @@ export async function generateJumuahKahfImage(quote: string, reciterName: string
     }
 
     ctx.fillStyle = '#D4AF37';
-    ctx.font = '24px Tajawal-Bold';
+    ctx.font = '24px Tajawal-Bold, NotoEmoji';
     ctx.fillText('رفيق الروح • جمعة مباركة', CANVAS_WIDTH / 2, 565);
 
     return canvas.toBuffer('image/png');
@@ -437,16 +439,16 @@ export async function generateQuranLiveImage(reciterName: string, isLive: boolea
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#D4AF37';
-    ctx.font = '60px Cairo';
+    ctx.font = '60px Cairo, NotoEmoji';
     ctx.fillText('القرآن الكريم', CANVAS_WIDTH / 2, 200);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '40px Tajawal';
+    ctx.font = '40px Tajawal, NotoEmoji';
     ctx.fillText(`القارئ: ${reciterName}`, CANVAS_WIDTH / 2, 300);
 
     if (isLive) {
         ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 30px Tajawal-Bold';
+        ctx.font = 'bold 30px Tajawal-Bold, NotoEmoji';
         ctx.fillText('🔴 بث مباشر', CANVAS_WIDTH / 2, 400);
     }
 
@@ -482,12 +484,12 @@ export async function generateAdhkarImage(dhikrText: string, isTasbih: boolean =
     ctx.textBaseline = 'middle';
 
     ctx.fillStyle = '#4CAF50';
-    ctx.font = '45px Cairo';
+    ctx.font = '45px Cairo, NotoEmoji';
     ctx.fillText(title, CANVAS_WIDTH / 2, 140);
 
     ctx.fillStyle = '#ffffff';
     const fontSize = isTasbih ? 55 : 40;
-    ctx.font = `${fontSize}px "Tajawal"`;
+    ctx.font = `${fontSize}px Tajawal, NotoEmoji`;
     const lines = wrapText(ctx, dhikrText, CANVAS_WIDTH - 250);
     const lineHeight = isTasbih ? 75 : 60;
 
@@ -524,11 +526,11 @@ export async function generateSalawatImage(text: string = 'اللهم صل وس�
     ctx.textBaseline = 'middle';
 
     ctx.fillStyle = '#4CAF50';
-    ctx.font = '50px Cairo';
+    ctx.font = '50px Cairo, NotoEmoji';
     ctx.fillText('صلوا على النبي ﷺ', CANVAS_WIDTH / 2, 180);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '42px Tajawal';
+    ctx.font = '42px Tajawal, NotoEmoji';
     const lines = wrapText(ctx, text, CANVAS_WIDTH - 250);
     const lineHeight = 60;
 

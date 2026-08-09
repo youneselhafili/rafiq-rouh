@@ -257,7 +257,9 @@ async function sendAudiencePayload(client: Client, guildId: string, channelId: s
     const chunks = splitMentions(audience.mention);
     const allowedMentions = audience.mention === '@everyone'
         ? { parse: ['everyone'] as const }
-        : { parse: ['roles', 'users'] as const, users: audience.userIds };
+        : audience.userIds?.length
+            ? { parse: ['roles'] as const, users: audience.userIds }
+            : { parse: ['roles', 'users'] as const };
         
     const imagePayload = {
         files: payload.files || [],
