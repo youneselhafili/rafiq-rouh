@@ -67,28 +67,28 @@ function drawStars(ctx: any, count: number, opacity: number) {
 function drawMosqueSilhouette(ctx: any) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.beginPath();
-    
+
     // Base
     ctx.moveTo(0, CANVAS_HEIGHT);
-    
+
     // Left Minaret
     ctx.lineTo(100, CANVAS_HEIGHT);
     ctx.lineTo(100, CANVAS_HEIGHT - 300);
     ctx.lineTo(120, CANVAS_HEIGHT - 320);
     ctx.lineTo(140, CANVAS_HEIGHT - 300);
     ctx.lineTo(140, CANVAS_HEIGHT - 100);
-    
+
     // Main Dome
     ctx.lineTo(CANVAS_WIDTH / 2 - 150, CANVAS_HEIGHT - 100);
     ctx.bezierCurveTo(CANVAS_WIDTH / 2 - 150, CANVAS_HEIGHT - 300, CANVAS_WIDTH / 2 + 150, CANVAS_HEIGHT - 300, CANVAS_WIDTH / 2 + 150, CANVAS_HEIGHT - 100);
-    
+
     // Right Minaret
     ctx.lineTo(CANVAS_WIDTH - 140, CANVAS_HEIGHT - 100);
     ctx.lineTo(CANVAS_WIDTH - 140, CANVAS_HEIGHT - 300);
     ctx.lineTo(CANVAS_WIDTH - 120, CANVAS_HEIGHT - 320);
     ctx.lineTo(CANVAS_WIDTH - 100, CANVAS_HEIGHT - 300);
     ctx.lineTo(CANVAS_WIDTH - 100, CANVAS_HEIGHT);
-    
+
     ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT);
     ctx.closePath();
     ctx.fill();
@@ -349,7 +349,7 @@ export async function generateJumuahImage(quote: string): Promise<any> {
     ctx.font = '40px Tajawal';
     const lines = wrapText(ctx, quote, CANVAS_WIDTH - 300);
     const lineHeight = 60;
-    
+
     const centerPoint = 390; // Center between 180 (title) and 630
     const totalHeight = lines.length * lineHeight;
     let startY = centerPoint - (totalHeight / 2) + (lineHeight / 2);
@@ -490,7 +490,7 @@ export async function generateAdhkarImage(dhikrText: string, isTasbih: boolean =
     ctx.font = `${fontSize}px "Tajawal"`;
     const lines = wrapText(ctx, dhikrText, CANVAS_WIDTH - 250);
     const lineHeight = isTasbih ? 75 : 60;
-    
+
     // We center the text between the header (Y=140) and the bottom line (Y=570)
     // Usable center is roughly (140 + 570) / 2 = 355
     const centerPoint = 355;
@@ -531,11 +531,11 @@ export async function generateSalawatImage(text: string = 'اللهم صل وس�
     ctx.font = '42px Tajawal';
     const lines = wrapText(ctx, text, CANVAS_WIDTH - 250);
     const lineHeight = 60;
-    
+
     const centerPoint = 390; // Center between 180 and 630
     const totalHeight = lines.length * lineHeight;
     let startY = centerPoint - (totalHeight / 2) + (lineHeight / 2);
-    
+
     for (const line of lines) {
         ctx.fillText(line, CANVAS_WIDTH / 2, startY);
         startY += lineHeight;
