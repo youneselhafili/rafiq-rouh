@@ -52,6 +52,7 @@ export interface QuranRuntimeState {
     playlistPage: number;
     selectedQueueIndex?: number;
     controllerOrder: string[];
+    completedQueueMode?: PlaybackMode;
 }
 
 const states = new Map<string, QuranRuntimeState>();
@@ -398,6 +399,7 @@ export async function startRandomQuranKareem(
 }
 
 async function finishPlayback(client: Client, state: QuranRuntimeState) {
+    state.completedQueueMode = state.playbackMode;
     state.currentTrack = undefined;
     const guild = client.guilds.cache.get(state.guildId);
     const voiceChannel = state.voiceChannelId ? guild?.channels.cache.get(state.voiceChannelId) : null;
@@ -411,7 +413,11 @@ async function finishPlayback(client: Client, state: QuranRuntimeState) {
     await startRandomQuranKareem(client, state, voiceChannel, false);
     const channel = await voiceTextChannel(client, state.voiceChannelId);
     if (!channel) return;
-    const message = await sendVoiceChat(channel, {
+    const completeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId('qr_complete_loop').setLabel('كمل الدورة').setEmoji('🔁').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('qr_complete_source').setLabel('الرجوع للمصدر').setEmoji('🕌').setStyle(ButtonStyle.Secondary),
+    );
+    await sendVoiceChat(channel, {
         content: state.controllerId ? `<@${state.controllerId}>` : undefined,
         embeds: [new EmbedBuilder()
             .setColor(0x57f287)
@@ -421,8 +427,11 @@ async function finishPlayback(client: Client, state: QuranRuntimeState) {
                 'سأبقى داخل القناة الصوتية وأواصل البث 24/24.',
             )
             .setTimestamp()],
+        components: [completeRow],
     }, true);
-    if (message) state.nowPlayingMessageId = message.id;
+    // NOTE: intentionally NOT stored as nowPlayingMessageId so the next
+    // track's notification does not delete this completion message/buttons.
+    state.nowPlayingMessageId = undefined;
     await sendAuditLog(client, state.guildId, {
         level: 'info', system: 'Quran', action: 'Requests completed; Quran Kareem 24/7 resumed', actorId: state.controllerId,
         details: `القرآن الكريم في <#${voiceChannel.id}>`,
@@ -984,10 +993,24 @@ export async function handleRadioInteractionV2(interaction: any) {
             const playlist = await loadPlaylist(state.guildId, state.controllerId);
             await startQueue(interaction.client, state, vc, playlist.tracks, 'Playlist', id === 'qr_saved_resume' ? playlist.position : 0);
         } else if (id === 'qr_complete_loop' && vc) {
-            const tracks = state.playbackMode === 'عشوائي' ? shuffle(state.queue) : state.queue;
-            await startQueue(interaction.client, state, vc, tracks, state.playbackMode || 'بالترتيب', 0);
+            const queueMode = state.completedQueueMode || state.playbackMode;
+            const tracks = queueMode === 'عشوائي' ? shuffle(state.queue) : state.queue;
+            state.completedQueueMode = undefined;
+            await interaction.editReply({ components: [] }).catch(() => {});
+            await startQueue(interaction.client, state, vc, tracks, queueMode || 'بالترتيب', 0);
         } else if (id === 'qr_complete_source') {
-            state.mode = 'Idle'; state.phase = 'main'; state.queue = []; state.currentTrack = undefined;
+            state.completedQueueMode = undefined;
+            await interaction.editReply({ components: [] }).catch(() => {});
+            if (state.twentyFourSeven) {
+                state.mode = 'QuranKareem';
+                state.phase = 'main';
+            } else {
+                stopGuildPlayback(state.guildId);
+                state.mode = 'Idle';
+                state.phase = 'main';
+                state.queue = [];
+                state.currentTrack = undefined;
+            }
         }
         await renderQuranPanel(interaction.client, state.guildId);
     } catch (error) {
