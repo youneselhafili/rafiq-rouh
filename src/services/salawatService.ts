@@ -4,6 +4,7 @@ import * as path from 'path';
 import moment from 'moment-timezone';
 import { AttachmentBuilder, Client, EmbedBuilder } from 'discord.js';
 import { generateSalawatImage } from './canvasService';
+import { tryBuildAttachment } from './canvasFallback';
 import { getAdvancedConfig, setAdvancedConfig } from './advancedConfigService';
 import {
     getAllSalawatV2Guilds, getSalawatV2Config, SalawatV2Config, saveSalawatV2Config,
@@ -74,7 +75,7 @@ export async function sendSalawatReminder(client: Client, guildId: string, chann
     const channel = await client.channels.fetch(channelId).catch(() => null);
     if (!channel?.isTextBased() || !('send' in channel)) return false;
     const text = await chooseText(guildId, true);
-    const image = await generateSalawatImage(text);
+    const file = await tryBuildAttachment(() => generateSalawatImage(text), 'salawat.png');
     
     let content = '';
     const rolesConfig = await getRolesConfig(guildId);
@@ -83,14 +84,12 @@ export async function sendSalawatReminder(client: Client, guildId: string, chann
     }
 
     try {
-        const embed = new EmbedBuilder().setColor(0x2e8b57).setTitle('ﷺ الصلاة على النبي').setDescription('صلّوا وسلّموا على الحبيب المصطفى ﷺ').setImage('attachment://salawat.png').setTimestamp();
-        const file = new AttachmentBuilder(image, { name: 'salawat.png' });
-        await channel.send({
-            content,
-            embeds: [embed],
-            files: [file],
-            allowedMentions: { parse: ['roles'] },
-        });
+        const embed = new EmbedBuilder().setColor(0x2e8b57).setTitle('ﷺ الصلاة على النبي')
+            .setDescription(file ? 'صلّوا وسلّموا على الحبيب المصطفى ﷺ' : `${text}\n\nصلّوا وسلّموا على الحبيب المصطفى ﷺ`).setTimestamp();
+        if (file) embed.setImage('attachment://salawat.png');
+        const payload: Record<string, any> = { content, embeds: [embed], allowedMentions: { parse: ['roles'] } };
+        if (file) payload.files = [file];
+        await channel.send(payload);
         // Personal Salawat DMs are scheduled from each user's DM settings.
         const runtime = await runtimeFor(guildId);
         runtime.sentCount = (runtime.sentCount || 0) + 1;

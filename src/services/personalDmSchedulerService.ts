@@ -8,6 +8,7 @@ import { dmText } from './dmLocalizationService';
 import { logger } from '../utils/logger';
 import { BOT_FOOTER, COLORS } from '../utils/constants';
 import { generateAdhanImage, generateAdhanWarningImage, generatePrayerCard, generateSalawatImage } from './canvasService';
+import { tryBuildAttachment } from './canvasFallback';
 import { loadSalawatTexts } from './salawatService';
 
 const PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
@@ -43,49 +44,46 @@ async function buildPersonalAdhanPayload(
     const cityLine = `${meta.name} — ${meta.countryAr}`;
 
     if (eventKey === 'warning') {
-        const image = await generateAdhanWarningImage(meta.name, meta.countryAr, prayerName, time);
-        const file = new AttachmentBuilder(image, { name: 'personal_adhan_warning.png' });
+        const file = await tryBuildAttachment(() => generateAdhanWarningImage(meta.name, meta.countryAr, prayerName, time), 'personal_adhan_warning.png');
         const embed = new EmbedBuilder()
             .setColor(COLORS.WARNING)
             .setTitle(title)
             .setDescription(`${prayerName} • ${cityLine} • ${time}`)
-            .setImage('attachment://personal_adhan_warning.png')
             .setFooter({ text: BOT_FOOTER })
             .setTimestamp();
-        return { embeds: [embed], files: [file] };
+        if (file) embed.setImage('attachment://personal_adhan_warning.png');
+        return { embeds: [embed], ...(file ? { files: [file] } : {}) };
     }
 
     if (eventKey === 'prayer_card') {
-        const image = await generatePrayerCard(
+        const file = await tryBuildAttachment(() => generatePrayerCard(
             meta.name,
             cleanTime(timings.Fajr || '-'),
             cleanTime(timings.Dhuhr || '-'),
             cleanTime(timings.Asr || '-'),
             cleanTime(timings.Maghrib || '-'),
             cleanTime(timings.Isha || '-'),
-        );
-        const file = new AttachmentBuilder(image, { name: 'personal_prayer_times.png' });
+        ), 'personal_prayer_times.png');
         const embed = new EmbedBuilder()
             .setColor(COLORS.PRIMARY)
             .setTitle(title)
-            .setDescription(cityLine)
-            .setImage('attachment://personal_prayer_times.png')
+            .setDescription(`${cityLine}\n\nفجر ${cleanTime(timings.Fajr || '-')} • ظهر ${cleanTime(timings.Dhuhr || '-')} • عصر ${cleanTime(timings.Asr || '-')} • مغرب ${cleanTime(timings.Maghrib || '-')} • عشاء ${cleanTime(timings.Isha || '-')}`)
             .setFooter({ text: BOT_FOOTER })
             .setTimestamp();
-        return { embeds: [embed], files: [file] };
+        if (file) embed.setImage('attachment://personal_prayer_times.png');
+        return { embeds: [embed], ...(file ? { files: [file] } : {}) };
     }
 
     const verse = DM_ADHAN_VERSES[Math.floor(Math.random() * DM_ADHAN_VERSES.length)];
-    const image = await generateAdhanImage(meta.name, meta.countryAr, prayer, time, verse.text, verse.surah);
-    const file = new AttachmentBuilder(image, { name: 'personal_adhan.png' });
+    const file = await tryBuildAttachment(() => generateAdhanImage(meta.name, meta.countryAr, prayer, time, verse.text, verse.surah), 'personal_adhan.png');
     const embed = new EmbedBuilder()
         .setColor(COLORS.ADHAN)
         .setTitle(title)
-        .setDescription(`${prayerName} • ${cityLine} • ${time}`)
-        .setImage('attachment://personal_adhan.png')
+        .setDescription(`${prayerName} • ${cityLine} • ${time}\n\n${verse.text}\n(${verse.surah})`)
         .setFooter({ text: BOT_FOOTER })
         .setTimestamp();
-    return { embeds: [embed], files: [file] };
+    if (file) embed.setImage('attachment://personal_adhan.png');
+    return { embeds: [embed], ...(file ? { files: [file] } : {}) };
 }
 
 let scheduler: cron.ScheduledTask | undefined;
@@ -143,16 +141,17 @@ async function sendPersonalSalawat(client: Client, userId: string, config: UserD
         if (!user) return;
         const texts = loadSalawatTexts();
         const text = texts[Math.floor(Math.random() * texts.length)] || 'اللهم صل وسلم على نبينا محمد';
-        const image = await generateSalawatImage(text);
-        const file = new AttachmentBuilder(image, { name: 'personal_salawat.png' });
+        const file = await tryBuildAttachment(() => generateSalawatImage(text), 'personal_salawat.png');
         const embed = new EmbedBuilder()
             .setColor(COLORS.SUCCESS)
             .setTitle(dmText('salawat_dm', config.language))
-            .setDescription('صلّوا وسلّموا على الحبيب المصطفى ﷺ')
-            .setImage('attachment://personal_salawat.png')
+            .setDescription(file ? 'صلّوا وسلّموا على الحبيب المصطفى ﷺ' : `${text}\n\nصلّوا وسلّموا على الحبيب المصطفى ﷺ`)
             .setFooter({ text: BOT_FOOTER })
             .setTimestamp();
-        await user.send({ embeds: [embed], files: [file] });
+        if (file) embed.setImage('attachment://personal_salawat.png');
+        const payload: Record<string, any> = { embeds: [embed] };
+        if (file) payload.files = [file];
+        await user.send(payload);
         await addDMSentEvent(userId, eventKey);
         await updateUserDMConfig(userId, { salawatConfig: { ...salawat, nextRunAt } });
         config.runtime = { ...config.runtime, sentEvents: [...(config.runtime?.sentEvents || []), eventKey].slice(-500) };

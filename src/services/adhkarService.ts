@@ -176,7 +176,7 @@ function typeToSubscriptionKey(type: string): keyof UserDMSubscriptions {
     return 'adhkar_other';
 }
 
-async function sendFiles(channel: any, type: string, buffers: any[], description: string, guildId: string, client: Client) {
+async function sendFiles(channel: any, type: string, buffers: any[], description: string, guildId: string, client: Client, fallbackText = '') {
     const embed = new EmbedBuilder().setColor(COLORS.ADHKAR).setTitle(`${getAdhkarEmoji(type)} ${getAdhkarTypeName(type)}`)
         .setDescription(description).setFooter({ text: BOT_FOOTER }).setTimestamp();
     const attachments = buffers.map((buffer, index) => new AttachmentBuilder(buffer, { name: `adhkar_${Date.now()}_${index + 1}.png` }));
@@ -187,16 +187,30 @@ async function sendFiles(channel: any, type: string, buffers: any[], description
         content = `<@&${rolesConfig.adhkarRoleId}>`;
     }
 
-    await channel.send({ content, embeds: [embed], files: attachments.slice(0, 10), allowedMentions: { parse: ['roles'] } });
-    for (let index = 10; index < attachments.length; index += 10) await channel.send({ files: attachments.slice(index, index + 10) });
+    if (attachments.length) {
+        await channel.send({ content, embeds: [embed], files: attachments.slice(0, 10), allowedMentions: { parse: ['roles'] } });
+        for (let index = 10; index < attachments.length; index += 10) await channel.send({ files: attachments.slice(index, index + 10) });
 
-    // Send DMs to specifically subscribed users for this adhkar type
-    const subKey = typeToSubscriptionKey(type);
-    const dmUsers = await getSubscribedUsers(subKey);
-    for (const userId of dmUsers) {
-        client.users.fetch(userId).then(user => {
-            user.send({ content: `📲 **${getAdhkarTypeName(type)}**`, embeds: [embed], files: attachments.slice(0, 10) }).catch(() => {});
-        }).catch(() => {});
+        // Send DMs to specifically subscribed users for this adhkar type
+        const subKey = typeToSubscriptionKey(type);
+        const dmUsers = await getSubscribedUsers(subKey);
+        for (const userId of dmUsers) {
+            client.users.fetch(userId).then(user => {
+                user.send({ content: `📲 **${getAdhkarTypeName(type)}**`, embeds: [embed], files: attachments.slice(0, 10) }).catch(() => {});
+            }).catch(() => {});
+        }
+    } else {
+        // Canvas failed: send a text message with the same content instead.
+        if (fallbackText) embed.setDescription(`${description}\n\n${fallbackText}`);
+        await channel.send({ content, embeds: [embed], allowedMentions: { parse: ['roles'] } });
+
+        const subKey = typeToSubscriptionKey(type);
+        const dmUsers = await getSubscribedUsers(subKey);
+        for (const userId of dmUsers) {
+            client.users.fetch(userId).then(user => {
+                user.send({ content: `📲 **${getAdhkarTypeName(type)}**\n${description}\n\n${fallbackText}` }).catch(() => {});
+            }).catch(() => {});
+        }
     }
 }
 
@@ -210,13 +224,19 @@ export async function sendRandomAdhkar(client: Client, guildId: string, channelI
         if (!allItems.length) return false;
         const allBuffers: any[] = [];
         const descriptions: string[] = [];
+        let fallbackText = '';
         for (const item of allItems) {
-            allBuffers.push(...generateAdaptiveAdhkarImages(item.text, getAdhkarTypeName(type), item.source || undefined, item.count));
+            try {
+                allBuffers.push(...generateAdaptiveAdhkarImages(item.text, getAdhkarTypeName(type), item.source || undefined, item.count));
+            } catch (error) {
+                logger.warn(`[Adhkar] Image generation failed for wudu item; using text fallback: ${error instanceof Error ? error.message : String(error)}`);
+                fallbackText += `${item.text}\n\n`;
+            }
             descriptions.push(describeAdhkarItem(item, type));
         }
         try {
-            await sendFiles(channel, type, allBuffers, descriptions.join('\n\n'), guildId, client);
-            await sendAuditLog(client, guildId, { level: 'info', system: 'Adhkar', action: 'Wudu adhkar sent', details: `${getAdhkarTypeName(type)} — <#${channelId}> — ${allBuffers.length} image(s) — ${allItems.length} items` });
+            await sendFiles(channel, type, allBuffers, descriptions.join('\n\n'), guildId, client, fallbackText);
+            await sendAuditLog(client, guildId, { level: 'info', system: 'Adhkar', action: 'Wudu adhkar sent', details: `${getAdhkarTypeName(type)} — <#${channelId}> — ${allBuffers.length} image(s) — ${allItems.length} items${fallbackText ? ' — text fallback (canvas failed)' : ''}` });
             return true;
         } catch (error) {
             logger.error(`[Adhkar] Failed to send ${type}:`, error);
@@ -228,16 +248,27 @@ export async function sendRandomAdhkar(client: Client, guildId: string, channelI
     const picked = await drawItem(guildId, type, true);
     let buffers: any[] = [];
     let description = '';
+    let fallbackText = '';
     if (picked.names?.length) {
-        buffers = [generateNamesGridImage(picked.names, picked.namesPage || 1, picked.namesTotalPages || 1)];
+        try {
+            buffers = [generateNamesGridImage(picked.names, picked.namesPage || 1, picked.namesTotalPages || 1)];
+        } catch (error) {
+            logger.warn(`[Adhkar] Image generation failed for names; using text fallback: ${error instanceof Error ? error.message : String(error)}`);
+            fallbackText = picked.names.join('\n');
+        }
         description = `🤍 **المحتوى:** أسماء الله الحسنى\n📚 **المصدر:** قاعدة أسماء الله الحسنى\n🔢 **المجموعة:** ${picked.namesPage || 1}/${picked.namesTotalPages || 1}`;
     } else if (picked.item) {
-        buffers = generateAdaptiveAdhkarImages(picked.item.text, getAdhkarTypeName(type), picked.item.source || undefined, picked.item.count);
+        try {
+            buffers = generateAdaptiveAdhkarImages(picked.item.text, getAdhkarTypeName(type), picked.item.source || undefined, picked.item.count);
+        } catch (error) {
+            logger.warn(`[Adhkar] Image generation failed for ${type}; using text fallback: ${error instanceof Error ? error.message : String(error)}`);
+            fallbackText = picked.item.text;
+        }
         description = describeAdhkarItem(picked.item, type);
     } else return false;
     try {
-        await sendFiles(channel, type, buffers, description, guildId, client);
-        await sendAuditLog(client, guildId, { level: 'info', system: 'Adhkar', action: type === FRIDAY_ADHKAR ? 'Weekly Friday dhikr sent' : 'Random dhikr sent', details: `${getAdhkarTypeName(type)} — <#${channelId}> — ${buffers.length} image(s)` });
+        await sendFiles(channel, type, buffers, description, guildId, client, fallbackText);
+        await sendAuditLog(client, guildId, { level: 'info', system: 'Adhkar', action: type === FRIDAY_ADHKAR ? 'Weekly Friday dhikr sent' : 'Random dhikr sent', details: `${getAdhkarTypeName(type)} — <#${channelId}> — ${buffers.length} image(s)${fallbackText ? ' — text fallback (canvas failed)' : ''}` });
         return true;
     } catch (error) {
         logger.error(`[Adhkar] Failed to send ${type}:`, error);

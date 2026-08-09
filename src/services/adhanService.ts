@@ -4,6 +4,7 @@ import moment from 'moment-timezone';
 import { AttachmentBuilder, Client, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { ALADHAN_API_BASE, BOT_FOOTER, COLORS, PRAYER_KEYS, PRAYER_NAMES } from '../utils/constants';
 import { generateAdhanImage, generateAdhanWarningImage, generatePrayerCard } from './canvasService';
+import { tryBuildAttachment } from './canvasFallback';
 import { fetchYabiladiPrayerTimes, clearYabiladiMonthlyCache } from './yabiladiService';
 import { getAllManagedAdhanGuilds, ManagedAdhanZone } from './adhanZoneService';
 import {
@@ -261,9 +262,9 @@ async function sendAudiencePayload(client: Client, guildId: string, channelId: s
             ? { parse: ['roles'] as const, users: audience.userIds }
             : { parse: ['roles', 'users'] as const };
         
-    const imagePayload = {
-        files: payload.files || [],
-    };
+    const imagePayload = payload.embeds?.length && !payload.files?.length
+        ? { embeds: payload.embeds }
+        : { files: payload.files || [] };
     const firstMention = chunks[0].trim();
 
     try {
@@ -318,13 +319,13 @@ async function sendWarning(client: Client, guildId: string, zone: ManagedAdhanZo
     if ((await getAdhanAudioConfig(guildId)).mode === 'stopped') return;
     const prayerName = PRAYER_NAMES[prayer] || prayer;
     const time = cleanTime(schedule.timings[prayer]);
-    const image = await generateAdhanWarningImage(schedule.city.name, schedule.city.countryAr, prayerName, time);
-    const file = new AttachmentBuilder(image, { name: 'adhan_warning.png' });
+    const file = await tryBuildAttachment(() => generateAdhanWarningImage(schedule.city.name, schedule.city.countryAr, prayerName, time), 'adhan_warning.png');
     const embed = new EmbedBuilder().setColor(COLORS.WARNING).setTitle('\u23F0 \u0628\u0642\u064a\u062a 5 \u062f\u0642\u0627\u0626\u0642 \u0639\u0644\u0649 \u0627\u0644\u0623\u0630\u0627\u0646')
         .setDescription(`\uD83D\uDD4C **${prayerName}**\n\uD83D\uDCCD ${schedule.city.name} - ${schedule.city.countryAr}\n\uD83D\uDD50 \`${time}\``)
-        .setImage('attachment://adhan_warning.png').setFooter({ text: BOT_FOOTER }).setTimestamp();
-    await sendAudiencePayload(client, guildId, zone.channelId, `\uD83D\uDCCB \u0645\u0648\u0627\u0642\u064a\u062a \u0627\u0644\u0635\u0644\u0627\u0629 \u0641\u064a ${schedule.city.name}.`, { embeds: [embed], files: [file] }, schedule.city.nameEn);
-    await sendAuditLog(client, guildId, { level: 'info', system: 'Adhan', action: '5-minute warning sent', details: `${schedule.city.name} - ${prayerName}` });
+        .setFooter({ text: BOT_FOOTER }).setTimestamp();
+    if (file) embed.setImage('attachment://adhan_warning.png');
+    await sendAudiencePayload(client, guildId, zone.channelId, `\u23F0 \u0628\u0642\u064a\u062a 5 \u062f\u0642\u0627\u0626\u0642 \u0639\u0644\u0649 \u0627\u0644\u0623\u0630\u0627\u0646: ${prayerName} \u0641\u064a ${schedule.city.name}.`, { embeds: [embed], files: file ? [file] : [] }, schedule.city.nameEn);
+    await sendAuditLog(client, guildId, { level: 'info', system: 'Adhan', action: '5-minute warning sent', details: `${schedule.city.name} - ${prayerName}${file ? '' : ' — text fallback (canvas failed)'}` });
 }
 
 async function sendAdhanNotification(client: Client, guildId: string, zone: ManagedAdhanZone, schedule: ZonePrayerSchedule, prayer: string) {
@@ -332,23 +333,23 @@ async function sendAdhanNotification(client: Client, guildId: string, zone: Mana
     const time = cleanTime(schedule.timings[prayer]);
     const verse = ADHAN_VERSES[Math.floor(Math.random() * ADHAN_VERSES.length)];
     const hadith = hadiths[Math.floor(Math.random() * hadiths.length)];
-    const image = await generateAdhanImage(schedule.city.name, schedule.city.countryAr, prayer, time, verse.text, verse.surah);
-    const file = new AttachmentBuilder(image, { name: 'adhan.png' });
+    const file = await tryBuildAttachment(() => generateAdhanImage(schedule.city.name, schedule.city.countryAr, prayer, time, verse.text, verse.surah), 'adhan.png');
     const embed = new EmbedBuilder().setColor(COLORS.ADHAN).setTitle(`\uD83D\uDD4C \u0623\u0630\u0627\u0646 ${prayerName} - ${schedule.city.name}`)
         .setDescription(`\uD83D\uDCCD **${schedule.city.name}** - ${schedule.city.countryAr}\n\uD83D\uDD50 **\u0627\u0644\u0648\u0642\u062a:** \`${time}\`\n\n${hadith}`)
-        .setImage('attachment://adhan.png').setFooter({ text: BOT_FOOTER }).setTimestamp();
-    return sendAudiencePayload(client, guildId, zone.channelId, `\uD83D\uDD14 \u062d\u0627\u0646 \u0648\u0642\u062a \u0635\u0644\u0627\u0629 ${prayerName} \u0641\u064a ${schedule.city.name}.`, { embeds: [embed], files: [file] }, schedule.city.nameEn);
+        .setFooter({ text: BOT_FOOTER }).setTimestamp();
+    if (file) embed.setImage('attachment://adhan.png');
+    return sendAudiencePayload(client, guildId, zone.channelId, `\uD83D\uDD14 \u062d\u0627\u0646 \u0648\u0642\u062a \u0635\u0644\u0627\u0629 ${prayerName} \u0641\u064a ${schedule.city.name}.`, { embeds: [embed], files: file ? [file] : [] }, schedule.city.nameEn);
 }
 
 async function sendPrayerCard(client: Client, guildId: string, zone: ManagedAdhanZone, schedule: ZonePrayerSchedule) {
     if ((await getAdhanAudioConfig(guildId)).mode === 'stopped') return;
     const timings = schedule.timings;
-    const image = await generatePrayerCard(schedule.city.name, cleanTime(timings.Fajr), cleanTime(timings.Dhuhr), cleanTime(timings.Asr), cleanTime(timings.Maghrib), cleanTime(timings.Isha));
-    const file = new AttachmentBuilder(image, { name: 'prayer_times.png' });
+    const file = await tryBuildAttachment(() => generatePrayerCard(schedule.city.name, cleanTime(timings.Fajr), cleanTime(timings.Dhuhr), cleanTime(timings.Asr), cleanTime(timings.Maghrib), cleanTime(timings.Isha)), 'prayer_times.png');
     const embed = new EmbedBuilder().setColor(COLORS.PRIMARY).setTitle(`\uD83D\uDCCB \u0645\u0648\u0627\u0642\u064a\u062a \u0627\u0644\u0635\u0644\u0627\u0629 - ${schedule.city.name}`)
-        .setDescription(`\uD83D\uDCCD ${schedule.city.name} - ${schedule.city.countryAr}\n\uD83D\uDCC5 ${schedule.hijriDate}`)
-        .setImage('attachment://prayer_times.png').setFooter({ text: BOT_FOOTER }).setTimestamp();
-    await sendAudiencePayload(client, guildId, zone.channelId, `\uD83D\uDCCB \u0645\u0648\u0627\u0642\u064a\u062a \u0627\u0644\u0635\u0644\u0627\u0629 \u0641\u064a ${schedule.city.name}.`, { embeds: [embed], files: [file] }, schedule.city.nameEn);
+        .setDescription(`\uD83D\uDCCD ${schedule.city.name} - ${schedule.city.countryAr}\n\uD83D\uDCC5 ${schedule.hijriDate}\n\n\u0641\u0627\u062c\u0631 ${cleanTime(timings.Fajr)} \u2022 \u0638\u0647\u0631 ${cleanTime(timings.Dhuhr)} \u2022 \u0639\u0635\u0631 ${cleanTime(timings.Asr)} \u2022 \u0645\u063a\u0631\u0628 ${cleanTime(timings.Maghrib)} \u2022 \u0639\u0634\u0627\u0621 ${cleanTime(timings.Isha)}`)
+        .setFooter({ text: BOT_FOOTER }).setTimestamp();
+    if (file) embed.setImage('attachment://prayer_times.png');
+    await sendAudiencePayload(client, guildId, zone.channelId, `\uD83D\uDCCB \u0645\u0648\u0627\u0642\u064a\u062a \u0627\u0644\u0635\u0644\u0627\u0629 \u0641\u064a ${schedule.city.name}.`, { embeds: [embed], files: file ? [file] : [] }, schedule.city.nameEn);
 }
 
 

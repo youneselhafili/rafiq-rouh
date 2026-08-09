@@ -4,6 +4,7 @@ import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client,
 } from 'discord.js';
 import { generateJumuahKahfImage } from './canvasService';
+import { tryBuildAttachment } from './canvasFallback';
 import { getAdvancedConfig, setAdvancedConfig } from './advancedConfigService';
 import { getAllJumuahV2Guilds, getJumuahV2Config, JumuahV2Config } from './jumuahConfigServiceV2';
 import { getAdhkarV2Config } from './adhkarConfigServiceV2';
@@ -175,7 +176,7 @@ async function executeJumuah(client: Client, guildId: string, config: JumuahV2Co
         if (!reciterIds.length) throw new Error('No reciter with Surat Al-Kahf is available.');
         const quote = takeQuote(runtime);
         const allRecitersLabel = `\u062c\u0645\u064a\u0639 \u0627\u0644\u0642\u0631\u0627\u0621 \u2022 ${reciterIds.length} \u062a\u0644\u0627\u0648\u0627\u062a`;
-        const image = await generateJumuahKahfImage(quote, allRecitersLabel);
+        const image = await tryBuildAttachment(() => generateJumuahKahfImage(quote, allRecitersLabel), 'surat-al-kahf-friday.png');
         const { channel, channelId } = await resolveAdhkarChannel(client, guildId, config.channelId);
         if (!channel?.isTextBased() || !('send' in channel)) throw new Error(`Adhkar text channel ${channelId} is unavailable.`);
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -190,11 +191,10 @@ async function executeJumuah(client: Client, guildId: string, config: JumuahV2Co
 
         const msgContent = `${content}\u{1F31F} **\u062c\u0645\u0639\u0629 \u0645\u0628\u0627\u0631\u0643\u0629**\n` +
             `\u{1F3A7} \u0633\u0648\u0631\u0629 \u0627\u0644\u0643\u0647\u0641 \u0641\u064a \u0627\u0644\u0642\u0646\u0627\u0629 \u0627\u0644\u0635\u0648\u062a\u064a\u0629 \u0628\u062c\u0645\u064a\u0639 \u0627\u0644\u0642\u0631\u0627\u0621\u060c \u0641\u064a Loop \u0645\u0646 \u0628\u0639\u062f \u0627\u0644\u0641\u062c\u0631 \u062d\u062a\u0649 \u0623\u0630\u0627\u0646 \u0627\u0644\u0638\u0647\u0631.`;
-        const file = new AttachmentBuilder(image, { name: 'surat-al-kahf-friday.png' });
 
         await channel.send({
             content: msgContent,
-            files: [file],
+            files: image ? [image] : [],
             components: [row],
             allowedMentions: { parse: rolesConfig.jumuahRoleId ? ['roles'] : ['everyone'] },
         });
@@ -204,7 +204,7 @@ async function executeJumuah(client: Client, guildId: string, config: JumuahV2Co
             const user = await client.users.fetch(userId).catch(() => null);
             if (!user) continue;
             const config = await getUserDMConfig(userId);
-            await user.send({ content: `${dmText('jumuah_dm', config.language)}:\n${msgContent}`, files: [file], components: [row] }).catch(() => {});
+            await user.send({ content: `${dmText('jumuah_dm', config.language)}:\n${msgContent}`, files: image ? [image] : [], components: [row] }).catch(() => {});
         }
 
         runtime.sentDates.push(date);
