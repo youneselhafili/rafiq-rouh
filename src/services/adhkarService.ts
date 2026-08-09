@@ -176,9 +176,44 @@ function typeToSubscriptionKey(type: string): keyof UserDMSubscriptions {
     return 'adhkar_other';
 }
 
+function compactCombinedDescription(description: string): string {
+    const groups = new Map<string, { marker: string; label: string; values: string[] }>();
+    const order: Array<{ kind: 'metadata'; key: string } | { kind: 'text'; value: string }> = [];
+    const plainLines = new Set<string>();
+
+    for (const line of description.split(/\n+/).map(value => value.trim()).filter(Boolean)) {
+        const match = line.match(/^((?:\p{Extended_Pictographic}\uFE0F?\s*)?)\*\*([^*]+?):\*\*\s*(.+)$/u);
+        if (!match) {
+            if (!plainLines.has(line)) {
+                plainLines.add(line);
+                order.push({ kind: 'text', value: line });
+            }
+            continue;
+        }
+
+        const [, marker, rawLabel, value] = match;
+        const label = rawLabel.trim();
+        const key = label;
+        let group = groups.get(key);
+        if (!group) {
+            group = { marker, label, values: [] };
+            groups.set(key, group);
+            order.push({ kind: 'metadata', key });
+        }
+        if (!group.values.includes(value)) group.values.push(value);
+    }
+
+    return order.map(entry => {
+        if (entry.kind === 'text') return entry.value;
+        const group = groups.get(entry.key)!;
+        return `${group.marker}**${group.label}:** ${group.values.join(' • ')}`;
+    }).join('\n');
+}
+
 async function sendFiles(channel: any, type: string, buffers: any[], description: string, guildId: string, client: Client, fallbackText = '') {
+    const displayDescription = buffers.length > 1 ? compactCombinedDescription(description) : description;
     const embed = new EmbedBuilder().setColor(COLORS.ADHKAR).setTitle(`${getAdhkarEmoji(type)} ${getAdhkarTypeName(type)}`)
-        .setDescription(description).setFooter({ text: BOT_FOOTER }).setTimestamp();
+        .setDescription(displayDescription).setFooter({ text: BOT_FOOTER }).setTimestamp();
     const attachments = buffers.map((buffer, index) => new AttachmentBuilder(buffer, { name: `adhkar_${Date.now()}_${index + 1}.png` }));
     
     let content = '';
@@ -201,7 +236,7 @@ async function sendFiles(channel: any, type: string, buffers: any[], description
         }
     } else {
         // Canvas failed: send a text message with the same content instead.
-        if (fallbackText) embed.setDescription(`${description}\n\n${fallbackText}`);
+        if (fallbackText) embed.setDescription(`${displayDescription}\n\n${fallbackText}`);
         await channel.send({ content, embeds: [embed], allowedMentions: { parse: ['roles'] } });
 
         const subKey = typeToSubscriptionKey(type);
