@@ -1,9 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { GuildSettings, GuildAdhkarConfig, GuildAdhanConfig, GuildSalawatConfig, GuildQuranRadioConfig } from '../types';
+import { GuildSettings, GuildAdhkarConfig, GuildAdhanConfig, GuildSalawatConfig, GuildQuranRadioConfig, GuildDonateConfig } from '../types';
 import { logger } from '../utils/logger';
 import { isFirestoreAvailable, getModuleConfig, setModuleConfig, deleteModuleConfig, getAllModuleConfigs } from './guildConfigService';
-import type { AdhkarConfigDoc, AdhanConfigDoc, AdhanZone, SalawatConfigDoc, QuranRadioConfigDoc } from '../types/config';
+import type { AdhkarConfigDoc, AdhanConfigDoc, AdhanZone, SalawatConfigDoc, QuranRadioConfigDoc, DonateConfigDoc } from '../types/config';
+
 
 // ─── Paths ────────────────────────────────────────────────────
 
@@ -50,11 +51,13 @@ function getOrCreateGuild(guildId: string): GuildSettings {
         adhan: [],
         salawat: [],
         quranRadio: null,
+        donate: null,
         createdAt: nowISO(),
         updatedAt: nowISO(),
     };
     writeGuild(settings);
     return settings;
+
 }
 
 function getAllGuildIds(): string[] {
@@ -480,3 +483,59 @@ export function clearSendHistory(guildId: string, category: string): void {
     }
     writeGuildData(guildId, data);
 }
+
+// ─── Donate Configs ───────────────────────────────────────────
+
+export async function saveDonateConfig(
+    guildId: string,
+    channelId: string,
+    interval: 'daily' | 'weekly' | 'monthly'
+): Promise<void> {
+    if (isFirestoreAvailable()) {
+        await setModuleConfig(guildId, 'donateConfig', {
+            enabled: true,
+            channelId,
+            interval,
+        });
+        logger.info(`Donate config saved via Firestore for guild ${guildId}`);
+        return;
+    }
+
+    const guild = getOrCreateGuild(guildId);
+    guild.donate = {
+        channelId,
+        interval,
+        enabled: true,
+    };
+    writeGuild(guild);
+    logger.info(`Donate config saved locally for guild ${guildId}`);
+}
+
+export async function getGuildDonateConfig(guildId: string): Promise<GuildDonateConfig | null> {
+    if (isFirestoreAvailable()) {
+        const doc = await getModuleConfig<DonateConfigDoc>(guildId, 'donateConfig');
+        if (!doc || !doc.enabled) return null;
+        return {
+            channelId: doc.channelId,
+            interval: doc.interval,
+            enabled: doc.enabled,
+        };
+    }
+
+    const guild = readGuild(guildId);
+    return guild?.donate || null;
+}
+
+export async function deleteDonateConfig(guildId: string): Promise<void> {
+    if (isFirestoreAvailable()) {
+        await deleteModuleConfig(guildId, 'donateConfig');
+        logger.info(`Donate config deleted via Firestore for guild ${guildId}`);
+        return;
+    }
+
+    const guild = getOrCreateGuild(guildId);
+    guild.donate = null;
+    writeGuild(guild);
+    logger.info(`Donate config deleted locally for guild ${guildId}`);
+}
+

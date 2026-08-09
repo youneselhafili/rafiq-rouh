@@ -70,12 +70,19 @@ export interface GuildQuranRadioConfig {
     defaultSource: string;
 }
 
+export interface GuildDonateConfig {
+    channelId: string;
+    interval: 'daily' | 'weekly' | 'monthly';
+    enabled: boolean;
+}
+
 export interface GuildSettings {
     guildId: string;
     adhkar: GuildAdhkarConfig[];
     adhan: GuildAdhanConfig[];
     salawat: GuildSalawatConfig[];
     quranRadio: GuildQuranRadioConfig | null;
+    donate: GuildDonateConfig | null;
     createdAt: string;
     updatedAt: string;
 }

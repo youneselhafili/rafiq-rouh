@@ -41,3 +41,11 @@ export interface SalawatConfigDoc {
     updatedAt: Timestamp | null;
 }
 
+export interface DonateConfigDoc {
+    enabled: boolean;
+    channelId: string;
+    interval: 'daily' | 'weekly' | 'monthly';
+    updatedAt: Timestamp | null;
+}
+
+

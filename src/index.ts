@@ -1,4 +1,4 @@
-﻿import { Client, GatewayIntentBits, Partials } from 'discord.js';
+import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { loadCommands } from './handlers/commandHandler';
@@ -73,11 +73,16 @@ async function bootstrap() {
         }
 
         await client.login(process.env.DISCORD_TOKEN);
+
+        // 4. Initialize Schedulers
+        const { initDonateScheduler } = await import('./services/donateSchedulerService');
+        initDonateScheduler(client);
     } catch (error) {
         logger.error('Failed to start the bot:', error);
         process.exit(1);
     }
 }
+
 
 bootstrap();
 

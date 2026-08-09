@@ -1,4 +1,4 @@
-﻿import { Events, Interaction, ButtonInteraction, AttachmentBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
+import { Events, Interaction, ButtonInteraction, AttachmentBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
 import { ExtendedClient } from '../handlers/commandHandler';
 import { logger } from '../utils/logger';
 import { generateAdhanImage, generateJumuahKahfImage } from '../services/canvasService';
@@ -160,9 +160,16 @@ export async function execute(interaction: Interaction) {
                 return;
             }
 
+            if (interaction.customId === 'donate_copy_rib') {
+                const { handleButton: handleDonateButton } = await import('../commands/info/donate');
+                await handleDonateButton(interaction as any);
+                return;
+            }
+
             if (interaction.isButton()) {
                 await handleButton(interaction);
             }
+
         } catch (error) {
             logger.error(`Error handling component interaction ${interaction.customId}:`, error);
             try {
