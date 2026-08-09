@@ -4,7 +4,7 @@
   "description": "رفيق الروح - بوت إسلامي للقرآن الكريم والأذان والأذكار",
   "main": "dist/src/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/clean-dist.cjs && tsc",
     "start": "node dist/src/index.js",
     "dev": "ts-node src/index.ts",
     "deploy-commands": "ts-node deploy-commands.ts",
