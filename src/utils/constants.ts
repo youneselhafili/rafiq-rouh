@@ -4,7 +4,7 @@ export const ALADHAN_API_BASE = 'https://api.aladhan.com/v1';
 
 // ─── Live Stream URLs (Haramain) ─────────────────────────────
 export const LIVE_MAKKAH_URL = 'https://stream.radiojar.com/0tpy1h0kxtzuv';
-export const LIVE_MADINA_URL = 'https://backup.qurango.net/radio/tarteel';
+export const LIVE_MADINA_URL = 'https://backup.qurango.net/radio/mix';
 
 // ─── Embed Colors ────────────────────────────────────────────
 export const COLORS = {
