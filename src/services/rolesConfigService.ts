@@ -5,6 +5,7 @@ export interface RolesConfig {
     salawatRoleId?: string;
     jumuahRoleId?: string;
     adhanRoleId?: string;
+    khatmaRoleId?: string;
 }
 
 const MODULE_NAME = 'roles';

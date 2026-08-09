@@ -14,6 +14,7 @@ const EDIT_BUTTON_MAP: Record<string, { field: string; label: string; emoji: str
     roles_setup_edit_salawat: { field: 'salawatRoleId', label: 'رتبة الصلوات', emoji: '🌿' },
     roles_setup_edit_jumuah: { field: 'jumuahRoleId', label: 'رتبة الجمعة', emoji: '🌟' },
     roles_setup_edit_adhan: { field: 'adhanRoleId', label: 'رتبة الآذان', emoji: '🕌' },
+    roles_setup_edit_khatma: { field: 'khatmaRoleId', label: 'رتبة الختمة', emoji: '📖' },
 };
 
 export async function handleRolesSetupInteraction(interaction: ButtonInteraction) {

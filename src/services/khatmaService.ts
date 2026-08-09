@@ -4,6 +4,7 @@ import { getAdvancedConfig, setAdvancedConfig, deleteAdvancedConfig } from './ad
 import { KhatmaState, KhatmaMode } from '../types';
 import { getAllUsersWithActiveKhatma, getUserDMConfig, updateUserDMConfig } from './dmSubscriptionService';
 import { logger } from '../utils/logger';
+import { getRolesConfig } from './rolesConfigService';
 
 const KHATMA_MODULE = 'khatma';
 
@@ -96,11 +97,26 @@ export async function sendKhatmaPages(client: Client, state: KhatmaState): Promi
 
         if (!target) return false;
 
+        let khatmaRoleId: string | undefined;
+        if (state.isGuild) {
+            const rolesConfig = await getRolesConfig(state.id);
+            if (rolesConfig.khatmaRoleId) {
+                const guild = client.guilds.cache.get(state.id) || await client.guilds.fetch(state.id).catch(() => null);
+                const role = guild ? await guild.roles.fetch(rolesConfig.khatmaRoleId).catch(() => null) : null;
+                if (role) khatmaRoleId = role.id;
+                else logger.warn(`Configured Khatma role ${rolesConfig.khatmaRoleId} was not found in guild ${state.id}.`);
+            }
+        }
+
         // Send pages in batches of 5 to respect Discord attachment limits
         for (let i = 0; i < pagesToSend.length; i += 5) {
             const batch = pagesToSend.slice(i, i + 5);
             const attachments = batch.map((url, index) => new AttachmentBuilder(url, { name: `page_${startPage + i + index}.jpg` }));
-            await target.send({ files: attachments });
+            await target.send({
+                content: i === 0 && khatmaRoleId ? `<@&${khatmaRoleId}>` : undefined,
+                files: attachments,
+                allowedMentions: khatmaRoleId ? { parse: [], roles: [khatmaRoleId] } : { parse: [] },
+            });
         }
 
         state.currentPage = endPage + 1;

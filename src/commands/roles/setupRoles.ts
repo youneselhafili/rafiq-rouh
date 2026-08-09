@@ -37,14 +37,16 @@ export function buildSetupPanel(config: RolesConfig) {
             { name: '🌿 الصلوات', value: config.salawatRoleId ? `<@&${config.salawatRoleId}>\n\`${config.salawatRoleId}\`` : '`غير محدد`', inline: true },
             { name: '🌟 الجمعة', value: config.jumuahRoleId ? `<@&${config.jumuahRoleId}>\n\`${config.jumuahRoleId}\`` : '`غير محدد`', inline: true },
             { name: '🕌 الآذان', value: config.adhanRoleId ? `<@&${config.adhanRoleId}>\n\`${config.adhanRoleId}\`` : '`غير محدد`', inline: true },
+            { name: '📖 الختمة', value: config.khatmaRoleId ? `<@&${config.khatmaRoleId}>\n\`${config.khatmaRoleId}\`` : '`بدون منشن`', inline: true },
         )
-        .setFooter({ text: 'هذه الإعدادات تلغي المنشن الافتراضي (@everyone)' });
+        .setFooter({ text: 'الختمة لا تستعمل @everyone: إذا لم تحدد رتبة تُرسل الصفحات بدون منشن' });
 
     const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId('roles_setup_edit_adhkar').setLabel('تعديل رتبة الأذكار').setStyle(ButtonStyle.Secondary).setEmoji('📿'),
         new ButtonBuilder().setCustomId('roles_setup_edit_salawat').setLabel('تعديل رتبة الصلوات').setStyle(ButtonStyle.Secondary).setEmoji('🌿'),
         new ButtonBuilder().setCustomId('roles_setup_edit_jumuah').setLabel('تعديل رتبة الجمعة').setStyle(ButtonStyle.Secondary).setEmoji('🌟'),
         new ButtonBuilder().setCustomId('roles_setup_edit_adhan').setLabel('تعديل رتبة الآذان').setStyle(ButtonStyle.Secondary).setEmoji('🕌'),
+        new ButtonBuilder().setCustomId('roles_setup_edit_khatma').setLabel('تعديل رتبة الختمة').setStyle(ButtonStyle.Secondary).setEmoji('📖'),
     );
 
     const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
