@@ -1,6 +1,6 @@
 {
   "name": "rafiq-el-rouh",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "رفيق الروح - بوت إسلامي للقرآن الكريم والأذان والأذكار",
   "main": "dist/src/index.js",
   "scripts": {
