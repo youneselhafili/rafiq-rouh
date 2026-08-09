@@ -1,0 +1,7 @@
+السجدة = https://server9.mp3quran.net/zakariya/032.mp3
+يس = https://server9.mp3quran.net/zakariya/036.mp3
+الدخان = https://server9.mp3quran.net/zakariya/044.mp3
+الواقعة = https://server9.mp3quran.net/zakariya/056.mp3
+الملك = https://server9.mp3quran.net/zakariya/067.mp3
+الإنسان = https://server9.mp3quran.net/zakariya/076.mp3
+البروج = https://server9.mp3quran.net/zakariya/085.mp3

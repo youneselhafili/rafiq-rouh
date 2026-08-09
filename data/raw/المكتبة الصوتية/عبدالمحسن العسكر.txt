@@ -1,0 +1,4 @@
+الفاتحة = https://server6.mp3quran.net/askr/001.mp3
+البقرة = https://server6.mp3quran.net/askr/002.mp3
+الأعراف = https://server6.mp3quran.net/askr/007.mp3
+الرحمن = https://server6.mp3quran.net/askr/055.mp3

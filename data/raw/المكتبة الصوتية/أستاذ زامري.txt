@@ -1,0 +1,7 @@
+السجدة = https://server12.mp3quran.net/malaysia/zamri/032.mp3
+الدخان = https://server12.mp3quran.net/malaysia/zamri/044.mp3
+الرحمن = https://server12.mp3quran.net/malaysia/zamri/055.mp3
+الواقعة = https://server12.mp3quran.net/malaysia/zamri/056.mp3
+الصف = https://server12.mp3quran.net/malaysia/zamri/061.mp3
+الملك = https://server12.mp3quran.net/malaysia/zamri/067.mp3
+الإنسان = https://server12.mp3quran.net/malaysia/zamri/076.mp3

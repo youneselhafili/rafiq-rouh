@@ -1,0 +1,3 @@
+الفاتحة = https://server12.mp3quran.net/malaysia/hafz/001.mp3
+مريم = https://server12.mp3quran.net/malaysia/hafz/019.mp3
+لقمان = https://server12.mp3quran.net/malaysia/hafz/031.mp3

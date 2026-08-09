@@ -53,15 +53,15 @@ function parseReciterFile(filePath: string): RawReciterFile | null {
  * Parse multiple reciter files into an array of QuranReciterSource objects.
  * Preserves surah order exactly as in the source files.
  */
-export function parseReciterFiles(filePaths: string[]): QuranReciterSource[] {
+export function parseReciterFiles(filePaths: string[], startId: number = 1, idPrefix: string = 'reciter_'): QuranReciterSource[] {
     const result: QuranReciterSource[] = [];
-    let idCounter = 1;
+    let idCounter = startId;
 
     for (const filePath of filePaths) {
         const parsed = parseReciterFile(filePath);
         if (parsed) {
             result.push({
-                id: `reciter_${idCounter++}`,
+                id: `${idPrefix}${idCounter++}`,
                 name: parsed.name,
                 surahs: parsed.surahs,
             });

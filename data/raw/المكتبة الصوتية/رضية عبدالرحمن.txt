@@ -1,0 +1,4 @@
+آل عمران = https://server12.mp3quran.net/malaysia/rziah/003.mp3
+الأنفال = https://server12.mp3quran.net/malaysia/rziah/008.mp3
+الأحزاب = https://server12.mp3quran.net/malaysia/rziah/033.mp3
+فاطر = https://server12.mp3quran.net/malaysia/rziah/035.mp3

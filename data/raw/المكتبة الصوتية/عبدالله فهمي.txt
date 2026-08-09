@@ -1,0 +1,4 @@
+الفاتحة = https://server12.mp3quran.net/malaysia/fhmi/001.mp3
+يس = https://server12.mp3quran.net/malaysia/fhmi/036.mp3
+النجم = https://server12.mp3quran.net/malaysia/fhmi/053.mp3
+القيامة = https://server12.mp3quran.net/malaysia/fhmi/075.mp3

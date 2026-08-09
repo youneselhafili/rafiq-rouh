@@ -8,7 +8,8 @@ export function buildQuranPanel(state: QuranRuntimeState) {
     const current = state.currentTrack
         ? `📖 **${state.currentTrack.title}**\n🎙️ ${state.currentTrack.subtitle || 'غير محدد'}`
         : state.mode === 'QuranKareem' ? '📖 القرآن الكريم (بث عشوائي 24/24)'
-            : state.mode === 'AudioLibrary' ? '📚 اختر القارئ وطريقة التشغيل' : '⏸️ في انتظار الاختيار';
+            : state.mode === 'FavoriteReciters' ? '⭐ القراء المفضلون — اختر القارئ وطريقة التشغيل'
+            : state.mode === 'AudioLibrary' ? '📚 المكتبة الصوتية — اختر القارئ وطريقة التشغيل' : '⏸️ في انتظار الاختيار';
 
     const embed = new EmbedBuilder()
         .setColor(0x2e8b57)
@@ -23,9 +24,19 @@ export function buildQuranPanel(state: QuranRuntimeState) {
         )
         .setTimestamp();
 
+    const allReciters = getAllReciters();
+    const selectedReciter = allReciters.find(r => r.id === state.selectedReciterId);
+    
+    const isFavoriteActive = state.mode === 'FavoriteReciters' || 
+        (state.mode === 'Reciter' && selectedReciter?.category === 'favorite');
+        
+    const isLibraryActive = state.mode === 'AudioLibrary' || 
+        (state.mode === 'Reciter' && selectedReciter?.category === 'library');
+
     const sources = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId('qr_btn_quran_kareem').setLabel('القرآن الكريم').setEmoji('📖').setStyle(state.mode === 'QuranKareem' ? ButtonStyle.Success : ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('qr_btn_audio_library').setLabel('المكتبة الصوتية').setEmoji('📚').setStyle(['AudioLibrary', 'Reciter'].includes(state.mode) ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('qr_btn_favorite_reciters').setLabel('القراء المفضلون').setEmoji('⭐').setStyle(isFavoriteActive ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('qr_btn_audio_library').setLabel('المكتبة الصوتية').setEmoji('📚').setStyle(isLibraryActive ? ButtonStyle.Success : ButtonStyle.Secondary),
     );
 
     const componentsList: ActionRowBuilder<any>[] = [sources];
@@ -41,7 +52,7 @@ export function buildQuranPanel(state: QuranRuntimeState) {
 
     let selector: ActionRowBuilder<StringSelectMenuBuilder>;
     if (state.phase === 'choose_surah' && state.selectedReciterId) {
-        const reciter = getAllReciters().find(r => r.id === state.selectedReciterId);
+        const reciter = allReciters.find(r => r.id === state.selectedReciterId);
         const pageStart = state.surahPage * 25;
         const items = reciter?.surahs.slice(pageStart, pageStart + 25) || [];
         selector = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
@@ -50,29 +61,72 @@ export function buildQuranPanel(state: QuranRuntimeState) {
             ),
         );
     } else {
-        const reciters = getAllReciters();
+        let reciterCategory: 'favorite' | 'library' = 'favorite';
+        if (state.mode === 'AudioLibrary') {
+            reciterCategory = 'library';
+        } else if (state.mode === 'FavoriteReciters') {
+            reciterCategory = 'favorite';
+        } else if (state.mode === 'Reciter' && selectedReciter) {
+            reciterCategory = selectedReciter.category || 'favorite';
+        }
+
+        const filteredReciters = allReciters.filter(r => r.category === reciterCategory);
+        
+        let displayReciters = filteredReciters;
+        let placeholder = 'اختر القارئ...';
+        
+        if (reciterCategory === 'library') {
+            const pageStart = (state.reciterPage || 0) * 25;
+            const totalPages = Math.ceil(filteredReciters.length / 25) || 1;
+            displayReciters = filteredReciters.slice(pageStart, pageStart + 25);
+            placeholder = `اختر القارئ — صفحة ${(state.reciterPage || 0) + 1}/${totalPages}`;
+        } else {
+            placeholder = 'اختر القارئ المفضل...';
+        }
+
+        const isEnabled = ['AudioLibrary', 'FavoriteReciters', 'Reciter'].includes(state.mode);
+
         selector = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
             new StringSelectMenuBuilder()
                 .setCustomId('qr_select_reciter')
-                .setPlaceholder(state.mode === 'AudioLibrary' || state.mode === 'Reciter' ? 'اختر القارئ...' : 'اختر المكتبة الصوتية أولاً')
-                .setDisabled(!(state.mode === 'AudioLibrary' || state.mode === 'Reciter'))
-                .addOptions(reciters.map(r => ({ label: r.name, value: r.id, default: r.id === state.selectedReciterId }))),
+                .setPlaceholder(isEnabled ? placeholder : 'اختر القراء المفضلين أو المكتبة الصوتية أولاً')
+                .setDisabled(!isEnabled)
+                .addOptions(
+                    displayReciters.map(r => ({
+                        label: r.name,
+                        value: r.id,
+                        default: r.id === state.selectedReciterId
+                    }))
+                ),
         );
     }
     componentsList.push(selector);
 
-    const transport = state.phase === 'choose_surah'
-        ? new ActionRowBuilder<ButtonBuilder>().addComponents(
+    let transport: ActionRowBuilder<ButtonBuilder>;
+    if (state.phase === 'choose_surah') {
+        transport = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder().setCustomId('qr_surah_prevpage').setLabel('السابق').setEmoji('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(state.surahPage === 0),
             new ButtonBuilder().setCustomId('qr_surah_nextpage').setLabel('التالي').setEmoji('➡️').setStyle(ButtonStyle.Secondary).setDisabled(state.surahPage >= 4),
             new ButtonBuilder().setCustomId('qr_back_library').setLabel('رجوع').setStyle(ButtonStyle.Secondary),
-        )
-        : new ActionRowBuilder<ButtonBuilder>().addComponents(
+        );
+    } else if (state.mode === 'AudioLibrary' && state.phase === 'main') {
+        const filteredReciters = allReciters.filter(r => r.category === 'library');
+        const totalPages = Math.ceil(filteredReciters.length / 25) || 1;
+        const currentPage = state.reciterPage || 0;
+        
+        transport = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId('qr_reciter_prevpage').setLabel('السابق').setEmoji('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(currentPage === 0),
+            new ButtonBuilder().setCustomId('qr_reciter_nextpage').setLabel('التالي').setEmoji('➡️').setStyle(ButtonStyle.Secondary).setDisabled(currentPage >= totalPages - 1),
+            new ButtonBuilder().setCustomId('qr_btn_stop').setLabel('إيقاف').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
+        );
+    } else {
+        transport = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder().setCustomId('qr_btn_prev').setLabel('السابق').setEmoji('⏮️').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('qr_btn_toggle_pause').setLabel(state.isPaused ? 'استئناف' : 'Pause').setEmoji(state.isPaused ? '▶️' : '⏸️').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('qr_btn_next').setLabel('التالي').setEmoji('⏭️').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('qr_btn_stop').setLabel('إيقاف').setEmoji('⏹️').setStyle(ButtonStyle.Danger),
         );
+    }
     componentsList.push(transport);
 
     const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(

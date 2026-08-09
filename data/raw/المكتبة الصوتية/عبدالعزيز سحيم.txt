@@ -1,0 +1,16 @@
+الفاتحة = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/001.mp3
+الكهف = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/018.mp3
+مريم = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/019.mp3
+لقمان = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/031.mp3
+الحجرات = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/049.mp3
+ق = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/050.mp3
+الذاريات = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/051.mp3
+الرحمن = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/055.mp3
+الواقعة = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/056.mp3
+التحريم = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/066.mp3
+الملك = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/067.mp3
+الجن = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/072.mp3
+القيامة = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/075.mp3
+الأعلى = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/087.mp3
+الفجر = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/089.mp3
+الإخلاص = https://server16.mp3quran.net/a_sheim/Rewayat-Warsh-A-n-Nafi/112.mp3

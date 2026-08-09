@@ -1,0 +1,14 @@
+هود = https://server9.mp3quran.net/abo_hashim/011.mp3
+يوسف = https://server9.mp3quran.net/abo_hashim/012.mp3
+الكهف = https://server9.mp3quran.net/abo_hashim/018.mp3
+مريم = https://server9.mp3quran.net/abo_hashim/019.mp3
+الأنبياء = https://server9.mp3quran.net/abo_hashim/021.mp3
+الفرقان = https://server9.mp3quran.net/abo_hashim/025.mp3
+ق = https://server9.mp3quran.net/abo_hashim/050.mp3
+الذاريات = https://server9.mp3quran.net/abo_hashim/051.mp3
+الطور = https://server9.mp3quran.net/abo_hashim/052.mp3
+النجم = https://server9.mp3quran.net/abo_hashim/053.mp3
+القمر = https://server9.mp3quran.net/abo_hashim/054.mp3
+الرحمن = https://server9.mp3quran.net/abo_hashim/055.mp3
+الواقعة = https://server9.mp3quran.net/abo_hashim/056.mp3
+الحديد = https://server9.mp3quran.net/abo_hashim/057.mp3

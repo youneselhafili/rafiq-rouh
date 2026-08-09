@@ -1,4 +1,4 @@
-﻿import * as fs from 'fs';
+import * as fs from 'fs';
 import * as path from 'path';
 import { QuranReciterSource, QuranRadioSource, QuranSource, QuranContentType } from '../types';
 import { parseReciterFiles } from './reciterStore';
@@ -8,10 +8,10 @@ import { logger } from '../utils/logger';
 // ─── Paths ────────────────────────────────────────────────────
 
 const DATA_RAW = path.join(process.cwd(), 'data', 'raw');
-const RECITERS_DIR = path.join(DATA_RAW, 'القرآن الكريم');
+const RECITERS_DIR = path.join(DATA_RAW, 'القراء المفضلون');
 const RADIOS_DIR = path.join(DATA_RAW, 'القنوات');
 
-const RECITER_SUBDIR = 'المكتبة الصوتية للقرآن الكريم';
+const RECITER_SUBDIR = 'المكتبة الصوتية';
 
 // ─── State (cached singleton) ─────────────────────────────────
 
@@ -20,30 +20,25 @@ let cachedRadios: QuranRadioSource[] | null = null;
 
 // ─── File Discovery ───────────────────────────────────────────
 
-function discoverReciterFiles(): string[] {
-    const files: string[] = [];
-
+function discoverFavFiles(): string[] {
     if (!fs.existsSync(RECITERS_DIR)) {
-        logger.warn(`[QuranRegistry] Reciters directory not found: ${RECITERS_DIR}`);
-        return files;
+        logger.warn(`[QuranRegistry] Favorite Reciters directory not found: ${RECITERS_DIR}`);
+        return [];
     }
-
-    // Main reciter files
-    const mainFiles = fs.readdirSync(RECITERS_DIR, { encoding: 'utf-8' })
+    return fs.readdirSync(RECITERS_DIR, { encoding: 'utf-8' })
         .filter(f => f.endsWith('.txt'))
         .map(f => path.join(RECITERS_DIR, f));
-    files.push(...mainFiles);
+}
 
-    // Subdirectory (riwayat)
+function discoverLibFiles(): string[] {
     const subPath = path.join(DATA_RAW, RECITER_SUBDIR);
-    if (fs.existsSync(subPath)) {
-        const subFiles = fs.readdirSync(subPath, { encoding: 'utf-8' })
-            .filter(f => f.endsWith('.txt'))
-            .map(f => path.join(subPath, f));
-        files.push(...subFiles);
+    if (!fs.existsSync(subPath)) {
+        logger.warn(`[QuranRegistry] Library directory not found: ${subPath}`);
+        return [];
     }
-
-    return files;
+    return fs.readdirSync(subPath, { encoding: 'utf-8' })
+        .filter(f => f.endsWith('.txt'))
+        .map(f => path.join(subPath, f));
 }
 
 function discoverRadioFiles(): string[] {
@@ -67,10 +62,14 @@ function discoverRadioFiles(): string[] {
 export function buildQuranRegistry(): void {
     logger.info('[QuranRegistry] Building Quran content registry...');
 
-    // Reciters
-    const reciterFiles = discoverReciterFiles();
-    cachedReciters = parseReciterFiles(reciterFiles);
-    logger.success(`[QuranRegistry] Loaded ${cachedReciters.length} reciters (${reciterFiles.length} files scanned)`);
+    const favFiles = discoverFavFiles();
+    const libFiles = discoverLibFiles();
+
+    const favs = parseReciterFiles(favFiles, 1, 'reciter_').map(r => ({ ...r, category: 'favorite' as const }));
+    const libs = parseReciterFiles(libFiles, 100, 'reciter_').map(r => ({ ...r, category: 'library' as const }));
+
+    cachedReciters = [...favs, ...libs];
+    logger.success(`[QuranRegistry] Loaded ${cachedReciters.length} reciters (${favFiles.length + libFiles.length} files scanned)`);
 
     // Radios
     const radioFiles = discoverRadioFiles();

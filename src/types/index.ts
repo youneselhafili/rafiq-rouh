@@ -132,6 +132,7 @@ export interface QuranReciterSource {
     id: string;
     name: string;
     surahs: QuranSurah[];
+    category?: 'favorite' | 'library';
 }
 
 export interface QuranRadioSource {

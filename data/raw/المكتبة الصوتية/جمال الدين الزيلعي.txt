@@ -1,0 +1,8 @@
+الفاتحة = https://server11.mp3quran.net/zilaie/001.mp3
+مريم = https://server11.mp3quran.net/zilaie/019.mp3
+السجدة = https://server11.mp3quran.net/zilaie/032.mp3
+القمر = https://server11.mp3quran.net/zilaie/054.mp3
+الملك = https://server11.mp3quran.net/zilaie/067.mp3
+المعارج = https://server11.mp3quran.net/zilaie/070.mp3
+المزمل = https://server11.mp3quran.net/zilaie/073.mp3
+الشمس = https://server11.mp3quran.net/zilaie/091.mp3

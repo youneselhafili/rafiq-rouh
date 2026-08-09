@@ -1,0 +1,8 @@
+يس = https://server6.mp3quran.net/muamr/036.mp3
+الضحى = https://server6.mp3quran.net/muamr/093.mp3
+الشرح = https://server6.mp3quran.net/muamr/094.mp3
+القدر = https://server6.mp3quran.net/muamr/097.mp3
+القارعة = https://server6.mp3quran.net/muamr/101.mp3
+الكافرون = https://server6.mp3quran.net/muamr/109.mp3
+النصر = https://server6.mp3quran.net/muamr/110.mp3
+المسد = https://server6.mp3quran.net/muamr/111.mp3

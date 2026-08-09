@@ -1,0 +1,4 @@
+الفاتحة = https://server12.mp3quran.net/malaysia/nor/001.mp3
+يوسف = https://server12.mp3quran.net/malaysia/nor/012.mp3
+مريم = https://server12.mp3quran.net/malaysia/nor/019.mp3
+لقمان = https://server12.mp3quran.net/malaysia/nor/031.mp3

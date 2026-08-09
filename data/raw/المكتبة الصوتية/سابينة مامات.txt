@@ -1,0 +1,4 @@
+آل عمران = https://server12.mp3quran.net/malaysia/mamat/003.mp3
+إبراهيم = https://server12.mp3quran.net/malaysia/mamat/014.mp3
+الأنبياء = https://server12.mp3quran.net/malaysia/mamat/021.mp3
+الحج = https://server12.mp3quran.net/malaysia/mamat/022.mp3

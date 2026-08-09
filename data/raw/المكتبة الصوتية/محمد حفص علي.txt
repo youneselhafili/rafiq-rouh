@@ -1,0 +1,5 @@
+الفاتحة = https://server12.mp3quran.net/malaysia/hfs/001.mp3
+التوبة = https://server12.mp3quran.net/malaysia/hfs/009.mp3
+هود = https://server12.mp3quran.net/malaysia/hfs/011.mp3
+الرعد = https://server12.mp3quran.net/malaysia/hfs/013.mp3
+الملك = https://server12.mp3quran.net/malaysia/hfs/067.mp3

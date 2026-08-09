@@ -16,7 +16,7 @@ import { sendAuditLog } from './auditLogService';
 import { logger } from '../utils/logger';
 import { isAdhanPlaybackActive } from './adhanAudioService';
 
-export type QuranMode = 'Idle' | 'QuranKareem' | 'Makkah' | 'Madinah' | 'Radio' | 'AudioLibrary' | 'Reciter';
+export type QuranMode = 'Idle' | 'QuranKareem' | 'FavoriteReciters' | 'AudioLibrary' | 'Reciter' | 'Makkah' | 'Madinah' | 'Radio';
 export type PlaybackMode = 'بالترتيب' | 'عشوائي' | 'اختيار يدوي' | 'Playlist' | 'سورة الكهف — الجمعة';
 
 export interface PlaylistTrack extends VoiceTrack {
@@ -45,6 +45,7 @@ export interface QuranRuntimeState {
     phase: 'main' | 'choose_mode' | 'choose_surah';
     selectedReciterId?: string;
     surahPage: number;
+    reciterPage: number;
     pendingTrack?: PlaylistTrack;
     queue: PlaylistTrack[];
     currentIndex: number;
@@ -84,7 +85,7 @@ export function getQuranRuntimeState(guildId: string): QuranRuntimeState {
     if (!state) {
         state = {
             guildId, mode: 'Idle', twentyFourSeven: false, isPaused: false, phase: 'main',
-            surahPage: 0, queue: [], currentIndex: 0, userOverride: false, playlistPage: 0, controllerOrder: [],
+            surahPage: 0, reciterPage: 0, queue: [], currentIndex: 0, userOverride: false, playlistPage: 0, controllerOrder: [],
         };
         states.set(guildId, state);
     }
@@ -934,7 +935,16 @@ export async function handleRadioInteractionV2(interaction: any) {
         if (id === 'qr_btn_quran_kareem' && vc) {
             await startRandomQuranKareem(interaction.client, state, vc, true);
         } else if (id === 'qr_btn_audio_library') {
-            state.mode = 'AudioLibrary'; state.phase = 'main'; state.userOverride = true;
+            state.mode = 'AudioLibrary'; state.phase = 'main'; state.userOverride = true; state.reciterPage = 0; state.selectedReciterId = undefined;
+        } else if (id === 'qr_btn_favorite_reciters') {
+            state.mode = 'FavoriteReciters'; state.phase = 'main'; state.userOverride = true; state.selectedReciterId = undefined;
+        } else if (id === 'qr_reciter_prevpage') {
+            state.reciterPage = Math.max(0, state.reciterPage - 1);
+        } else if (id === 'qr_reciter_nextpage') {
+            const allReciters = getAllReciters();
+            const filteredReciters = allReciters.filter(r => r.category === 'library');
+            const totalPages = Math.ceil(filteredReciters.length / 25);
+            state.reciterPage = Math.min(totalPages - 1, state.reciterPage + 1);
         } else if (id === 'qr_mode_ordered' && vc && state.selectedReciterId) {
             await startQueue(interaction.client, state, vc, reciterTracks(state.selectedReciterId), 'بالترتيب');
         } else if (id === 'qr_mode_random' && vc && state.selectedReciterId) {

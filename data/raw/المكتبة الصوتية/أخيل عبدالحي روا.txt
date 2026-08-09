@@ -1,0 +1,4 @@
+ق = https://server12.mp3quran.net/malaysia/akil/050.mp3
+الذاريات = https://server12.mp3quran.net/malaysia/akil/051.mp3
+الطور = https://server12.mp3quran.net/malaysia/akil/052.mp3
+الواقعة = https://server12.mp3quran.net/malaysia/akil/056.mp3

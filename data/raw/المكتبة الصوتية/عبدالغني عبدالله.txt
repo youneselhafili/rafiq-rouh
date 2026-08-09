@@ -1,0 +1,13 @@
+الفاتحة = https://server12.mp3quran.net/malaysia/abdulgani/001.mp3
+البقرة = https://server12.mp3quran.net/malaysia/abdulgani/002.mp3
+المائدة = https://server12.mp3quran.net/malaysia/abdulgani/005.mp3
+الأنعام = https://server12.mp3quran.net/malaysia/abdulgani/006.mp3
+التوبة = https://server12.mp3quran.net/malaysia/abdulgani/009.mp3
+الملك = https://server12.mp3quran.net/malaysia/abdulgani/067.mp3
+الأعلى = https://server12.mp3quran.net/malaysia/abdulgani/087.mp3
+الشمس = https://server12.mp3quran.net/malaysia/abdulgani/091.mp3
+الليل = https://server12.mp3quran.net/malaysia/abdulgani/092.mp3
+الشرح = https://server12.mp3quran.net/malaysia/abdulgani/094.mp3
+التين = https://server12.mp3quran.net/malaysia/abdulgani/095.mp3
+القدر = https://server12.mp3quran.net/malaysia/abdulgani/097.mp3
+الناس = https://server12.mp3quran.net/malaysia/abdulgani/114.mp3

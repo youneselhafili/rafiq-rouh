@@ -1,0 +1,7 @@
+الروم = https://server16.mp3quran.net/a_alaskar/Rewayat-Hafs-A-n-Assem/030.mp3
+يس = https://server16.mp3quran.net/a_alaskar/Rewayat-Hafs-A-n-Assem/036.mp3
+غافر = https://server16.mp3quran.net/a_alaskar/Rewayat-Hafs-A-n-Assem/040.mp3
+الحاقة = https://server16.mp3quran.net/a_alaskar/Rewayat-Hafs-A-n-Assem/069.mp3
+المعارج = https://server16.mp3quran.net/a_alaskar/Rewayat-Hafs-A-n-Assem/070.mp3
+نوح = https://server16.mp3quran.net/a_alaskar/Rewayat-Hafs-A-n-Assem/071.mp3
+القيامة = https://server16.mp3quran.net/a_alaskar/Rewayat-Hafs-A-n-Assem/075.mp3

@@ -1,0 +1,8 @@
+ق = https://server8.mp3quran.net/fahad_otibi/050.mp3
+الواقعة = https://server8.mp3quran.net/fahad_otibi/056.mp3
+الحاقة = https://server8.mp3quran.net/fahad_otibi/069.mp3
+الجن = https://server8.mp3quran.net/fahad_otibi/072.mp3
+المزمل = https://server8.mp3quran.net/fahad_otibi/073.mp3
+المدثر = https://server8.mp3quran.net/fahad_otibi/074.mp3
+القيامة = https://server8.mp3quran.net/fahad_otibi/075.mp3
+الإنسان = https://server8.mp3quran.net/fahad_otibi/076.mp3

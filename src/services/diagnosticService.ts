@@ -131,14 +131,14 @@ export async function auditContentAndDatabase(): Promise<{ checks: DiagnosticChe
             adhkarFormatIssues.push(`${path.basename(file)}: الأرقام=${numbers.length}، النصوص=${textFields}`);
         }
     }
-    const rawReciterCount = textFiles.filter(file => file.includes(path.sep + 'القرآن الكريم' + path.sep) || file.includes(path.sep + 'المكتبة الصوتية للقرآن الكريم' + path.sep)).length;
+    const rawReciterCount = textFiles.filter(file => file.includes(path.sep + 'القراء المفضلون' + path.sep) || file.includes(path.sep + 'المكتبة الصوتية' + path.sep)).length;
     const rawRadioCount = textFiles.filter(file => file.includes(path.sep + 'القنوات' + path.sep)).length;
     const reciters = getAllReciters();
     const radios = getAllRadios();
     const allUrls = reciters.flatMap(reciter => reciter.surahs.map(surah => surah.url)).concat(radios.map(radio => radio.streamUrl));
     const duplicateUrls = duplicateValues(allUrls);
     const emptyUrls = allUrls.filter(url => !url.trim()).length;
-    const badReciterCounts = reciters.filter(reciter => reciter.surahs.length !== 114).map(reciter => `${reciter.name}:${reciter.surahs.length}`);
+    const badReciterCounts = reciters.filter(reciter => reciter.category === 'favorite' && reciter.surahs.length !== 114).map(reciter => `${reciter.name}:${reciter.surahs.length}`);
     const duplicateReciterIds = duplicateValues(reciters.map(reciter => reciter.id));
     const duplicateRadioIds = duplicateValues(radios.map(radio => radio.id));
     const salawat = loadSalawatTexts();
