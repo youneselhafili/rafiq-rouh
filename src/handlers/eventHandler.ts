@@ -1,7 +1,8 @@
-import { Client } from 'discord.js';
+import { Client, Events } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
+import { isPrimaryRuntime } from '../services/runtimeLeadershipService';
 
 export interface BotEvent {
     name: string;
@@ -29,11 +30,12 @@ export function loadEvents(client: Client): void {
         try {
             const event: BotEvent = require(filePath);
 
-            if (event.once) {
-                client.once(event.name, (...args) => event.execute(...args));
-            } else {
-                client.on(event.name, (...args) => event.execute(...args));
-            }
+            const execute = (...args: unknown[]) => {
+                if (event.name !== Events.ClientReady && !isPrimaryRuntime()) return;
+                return event.execute(...args);
+            };
+            if (event.once) client.once(event.name, execute);
+            else client.on(event.name, execute);
 
             logger.info(`🎧 Loaded event: ${event.name} ${event.once ? '(once)' : ''}`);
         } catch (error) {

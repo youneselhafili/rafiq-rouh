@@ -7,7 +7,7 @@ import { logger } from '../utils/logger';
 
 const KHATMA_MODULE = 'khatma';
 
-const IMAGE_BASE_URL = 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/kfgqpc/hafs-wasat';
+export const QURAN_PAGE_IMAGE_BASE_URL = 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/kfgqpc/hafs-wasat';
 
 const KHATMA_DUA = `اللَّهُمَّ ارْحَمْنِي بالقُرْءَانِ وَاجْعَلهُ لِي إِمَاماً وَنُوراً وَهُدًى وَرَحْمَةً
 اللَّهُمَّ ذَكِّرْنِي مِنْهُ مَانَسِيتُ وَعَلِّمْنِي مِنْهُ مَاجَهِلْتُ وَارْزُقْنِي تِلاَوَتَهُ آنَاءَ اللَّيْلِ وَأَطْرَافَ النَّهَارِ وَاجْعَلْهُ لِي حُجَّةً يَارَبَّ العَالَمِينَ
@@ -56,7 +56,7 @@ async function sendKhatmaPages(client: Client, state: KhatmaState): Promise<bool
     }
 
     for (let i = startPage; i <= endPage; i++) {
-        pagesToSend.push(`${IMAGE_BASE_URL}/${i}.jpg`);
+        pagesToSend.push(`${QURAN_PAGE_IMAGE_BASE_URL}/${i}.jpg`);
     }
 
     try {

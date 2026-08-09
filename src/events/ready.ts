@@ -9,6 +9,8 @@ import { initializeQuranSystems } from '../services/quranRadioServiceV2';
 import { initPersonalDMScheduler } from '../services/personalDmSchedulerService';
 import { startKhatmaCron } from '../services/khatmaService';
 import { startDashboardApi } from '../services/dashboardApiService';
+import { acquirePrimaryRuntime } from '../services/runtimeLeadershipService';
+import { initDonateScheduler } from '../services/donateSchedulerService';
 
 export const name = Events.ClientReady;
 export const once = true;
@@ -33,6 +35,10 @@ async function ensureApplicationIcon(client: ExtendedClient): Promise<void> {
 }
 export async function execute(client: ExtendedClient) {
     logger.success(`Logged in as ${client.user?.tag}!`);
+    if (!await acquirePrimaryRuntime()) {
+        logger.warn('Duplicate bot process detected: Discord events and background jobs are disabled in this instance.');
+        return;
+    }
     startDashboardApi(client);
 
     // Deploy slash commands to Discord
@@ -57,7 +63,7 @@ export async function execute(client: ExtendedClient) {
     await initAdhkarCrons(client);
     initPersonalDMScheduler(client);
     startKhatmaCron(client);
+    initDonateScheduler(client);
     logger.success('Background jobs initialized.');
 }
-
 

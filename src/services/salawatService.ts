@@ -3,9 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import moment from 'moment-timezone';
 import { AttachmentBuilder, Client, EmbedBuilder } from 'discord.js';
+import { getFirestore } from 'firebase-admin/firestore';
 import { generateSalawatImage } from './canvasService';
 import { tryBuildAttachment } from './canvasFallback';
 import { getAdvancedConfig, setAdvancedConfig } from './advancedConfigService';
+import { isFirestoreAvailable } from './guildConfigService';
 import {
     getAllSalawatV2Guilds, getSalawatV2Config, SalawatV2Config, saveSalawatV2Config,
 } from './salawatConfigServiceV2';
@@ -16,6 +18,7 @@ interface SalawatRuntime {
     pool: number[];
     sentCount: number;
     lastSentAt?: string;
+    lastClaimedAt?: string;
 }
 
 export interface SalawatStats {
@@ -30,6 +33,8 @@ const SALAWAT_FILE = path.join(process.cwd(), 'data', 'raw', 'salawat.txt');
 const activeTimers = new Map<string, NodeJS.Timeout>();
 const activeCrons = new Map<string, cron.ScheduledTask[]>();
 const activeDmSends = new Set<string>();
+const activeGuildSends = new Set<string>();
+const SALAWAT_DEDUP_WINDOW_MS = 2 * 60 * 1000;
 
 export function loadSalawatTexts(): string[] {
     try {
@@ -49,7 +54,13 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 async function runtimeFor(guildId: string): Promise<SalawatRuntime> {
-    return await getAdvancedConfig<SalawatRuntime>(guildId, RUNTIME_MODULE) || { pool: [], sentCount: 0 };
+    const stored = await getAdvancedConfig<SalawatRuntime>(guildId, RUNTIME_MODULE);
+    return {
+        pool: Array.isArray(stored?.pool) ? stored.pool : [],
+        sentCount: stored?.sentCount || 0,
+        lastSentAt: stored?.lastSentAt,
+        lastClaimedAt: stored?.lastClaimedAt,
+    };
 }
 
 async function chooseText(guildId: string, consume: boolean): Promise<string> {
@@ -70,20 +81,48 @@ export async function buildSalawatPreview(guildId: string): Promise<{ text: stri
 
 import { getRolesConfig } from './rolesConfigService';
 
+function isRecent(value?: string): boolean {
+    if (!value) return false;
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) && Date.now() - timestamp < SALAWAT_DEDUP_WINDOW_MS;
+}
 
-export async function sendSalawatReminder(client: Client, guildId: string, channelId: string): Promise<boolean> {
-    const channel = await client.channels.fetch(channelId).catch(() => null);
-    if (!channel?.isTextBased() || !('send' in channel)) return false;
-    const text = await chooseText(guildId, true);
-    const file = await tryBuildAttachment(() => generateSalawatImage(text), 'salawat.png');
-    
-    let content = '';
-    const rolesConfig = await getRolesConfig(guildId);
-    if (rolesConfig.salawatRoleId) {
-        content = `<@&${rolesConfig.salawatRoleId}>`;
+async function claimSalawatSend(guildId: string): Promise<boolean> {
+    const claimedAt = new Date().toISOString();
+    if (isFirestoreAvailable()) {
+        const ref = getFirestore().doc(`guilds/${guildId}/${RUNTIME_MODULE}/default`);
+        return getFirestore().runTransaction(async transaction => {
+            const snapshot = await transaction.get(ref);
+            const runtime = (snapshot.data() || {}) as Partial<SalawatRuntime>;
+            if (isRecent(runtime.lastClaimedAt) || isRecent(runtime.lastSentAt)) return false;
+            transaction.set(ref, { lastClaimedAt: claimedAt }, { merge: true });
+            return true;
+        });
     }
 
+    const runtime = await runtimeFor(guildId);
+    if (isRecent(runtime.lastClaimedAt) || isRecent(runtime.lastSentAt)) return false;
+    runtime.lastClaimedAt = claimedAt;
+    await setAdvancedConfig(guildId, RUNTIME_MODULE, runtime);
+    return true;
+}
+
+
+export async function sendSalawatReminder(client: Client, guildId: string, channelId: string): Promise<boolean> {
+    if (activeGuildSends.has(guildId)) return false;
+    activeGuildSends.add(guildId);
+
     try {
+        if (!await claimSalawatSend(guildId)) {
+            logger.info(`[Salawat] Skipped duplicate reminder for ${guildId}.`);
+            return false;
+        }
+        const channel = await client.channels.fetch(channelId).catch(() => null);
+        if (!channel?.isTextBased() || !('send' in channel)) return false;
+        const text = await chooseText(guildId, true);
+        const file = await tryBuildAttachment(() => generateSalawatImage(text), 'salawat.png');
+        const rolesConfig = await getRolesConfig(guildId);
+        const content = rolesConfig.salawatRoleId ? `<@&${rolesConfig.salawatRoleId}>` : '';
         const embed = new EmbedBuilder().setColor(0x2e8b57).setTitle('ﷺ الصلاة على النبي')
             .setDescription(file ? 'صلّوا وسلّموا على الحبيب المصطفى ﷺ' : `${text}\n\nصلّوا وسلّموا على الحبيب المصطفى ﷺ`).setTimestamp();
         if (file) embed.setImage('attachment://salawat.png');
@@ -101,6 +140,8 @@ export async function sendSalawatReminder(client: Client, guildId: string, chann
         logger.error(`[Salawat] Failed to send in ${channelId}:`, error);
         await sendAuditLog(client, guildId, { level: 'error', system: 'Salawat', action: 'Salawat reminder failed', details: `<#${channelId}>` });
         return false;
+    } finally {
+        activeGuildSends.delete(guildId);
     }
 }
 

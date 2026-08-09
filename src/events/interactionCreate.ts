@@ -103,6 +103,12 @@ export async function execute(interaction: Interaction) {
     } else if (interaction.isButton() || interaction.isStringSelectMenu() || interaction.isChannelSelectMenu() || interaction.isRoleSelectMenu()) {
         try {
             if (interaction.guildId) void sendAuditLog(client, interaction.guildId, { level: 'info', system: 'Interaction', action: interaction.customId, actorId: interaction.user.id }).catch(() => {});
+            if (interaction.customId === 'setup_channels_select') {
+                const { handleSetupChannelsInteraction } = await import('../commands/setup/setup');
+                await handleSetupChannelsInteraction(interaction as any);
+                return;
+            }
+
             if (interaction.customId.startsWith('quran_setup_')) {
                 const { handleQuranSetupInteraction } = await import('../commands/quran/quranSetupHandler');
                 await handleQuranSetupInteraction(interaction as any);
@@ -241,7 +247,6 @@ async function handleButton(interaction: ButtonInteraction) {
         }
     }
 }
-
 
 
 

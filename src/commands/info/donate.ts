@@ -48,7 +48,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         )
         .setThumbnail(interaction.client.user?.displayAvatarURL() ?? null)
         .setFooter({
-            text: 'رفيق الروح • المطوّر: يونس الحفيلي  •  جزاكم الله خيراً ❤️',
+            text: 'رفيق الروح • المطوّر: يونس الحافلي  •  جزاكم الله خيراً ❤️',
             iconURL: interaction.client.user?.displayAvatarURL(),
         })
         .setTimestamp();

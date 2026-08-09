@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { ChildProcess, spawn } from 'child_process';
 import ffmpegPath from 'ffmpeg-static';
 import {
@@ -279,12 +280,8 @@ async function resourceFromUrl(url: string) {
     const isHLS = /\.m3u8(?:$|\?)/i.test(url);
     const isLiveStream = /radiojar\.com|icecast|shoutcast|qurango\.net\/radio|backup\.qurango|m3u8/i.test(url);
 
-    if (isHLS || isLiveStream || /^https?:\/\//i.test(url)) {
-        // Feed the URL directly to FFmpeg with auto-reconnect for HLS,
-        // live streams, and plain MP3 files alike. Piping the HTTP stream
-        // through axios/Arbitrary stops as soon as the server closes the
-        // connection, which cuts the current surah short and jumps to the
-        // next one. FFmpeg reconnects instead, so the recitation plays fully.
+    if (isHLS || isLiveStream) {
+        // Live/HLS sources need FFmpeg reconnect and transcoding support.
         const transcoder = spawnOggTranscoder(url, isHLS ? 'HLS' : isLiveStream ? 'live' : 'MP3');
         if (!transcoder.stdout) {
             try { transcoder.kill(); } catch {}
@@ -294,6 +291,18 @@ async function resourceFromUrl(url: string) {
             resource: createAudioResource(transcoder.stdout, { inputType: StreamType.OggOpus }),
             transcoder,
         };
+    }
+    if (/^https?:\/\//i.test(url)) {
+        // Plain surah MP3s are streamed directly. This avoids depending on a
+        // platform-specific FFmpeg child process for every track while the
+        // zero timeout allows long recitations to finish normally.
+        const response = await axios.get(url, {
+            responseType: 'stream',
+            timeout: 0,
+            maxRedirects: 5,
+            headers: { 'User-Agent': 'Rafiq-Rouh/0.1 Quran audio player' },
+        });
+        return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
     }
     return { resource: createAudioResource(url) };
 }
@@ -346,6 +355,24 @@ export async function playTrackQueue(
     active.set(guildId, session);
 
     let sameTrackRetries = 0;
+    let retryIndex = session.index;
+    let playbackStartedAt = 0;
+    let announcedIndex = -1;
+    const minimumHealthyPlaybackMs = 3_000;
+
+    const registerFailure = () => {
+        if (retryIndex !== session.index) {
+            retryIndex = session.index;
+            sameTrackRetries = 0;
+        }
+        sameTrackRetries += 1;
+        return sameTrackRetries;
+    };
+
+    const resetRetries = () => {
+        retryIndex = session.index;
+        sameTrackRetries = 0;
+    };
 
     const playIndex = async () => {
         if (session.stopped || active.get(guildId) !== session) return;
@@ -357,37 +384,70 @@ export async function playTrackQueue(
         }
         const track = session.tracks![session.index];
         try {
+            const prepared = await resourceFromUrl(track.url);
+            stopTranscoder(session);
+            session.transcoder = prepared.transcoder;
+            player.play(prepared.resource);
+            logger.info(`[Voice] Track prepared: ${track.title}${track.subtitle ? ` — ${track.subtitle}` : ''}.`);
+        } catch (error) {
+            logger.error(`[Voice] Track failed (${track.title}):`, error);
+            if (registerFailure() <= 2) {
+                setTimeout(playIndex, 3_000);
+                return;
+            }
+            session.index += 1;
+            announcedIndex = -1;
+            resetRetries();
+            setTimeout(playIndex, 3_000);
+        }
+    };
+
+    player.on(AudioPlayerStatus.Playing, () => {
+        if (session.stopped || active.get(guildId) !== session) return;
+        playbackStartedAt = Date.now();
+        if (announcedIndex === session.index) return;
+        announcedIndex = session.index;
+        const track = session.tracks![session.index];
+        void (async () => {
             await session.onTrackStart?.(track, session.index, session.tracks!.length);
             await setPlaybackChannelStatus(
                 channel,
                 track.statusText || `📖 ${track.title}${track.subtitle ? ` • القارئ: ${track.subtitle}` : ''}`,
             );
-            const prepared = await resourceFromUrl(track.url);
-            stopTranscoder(session);
-            session.transcoder = prepared.transcoder;
-            sameTrackRetries = 0;
-            player.play(prepared.resource);
             logger.success(`[Voice] Track playback started: ${track.title}${track.subtitle ? ` — ${track.subtitle}` : ''}.`);
-        } catch (error) {
-            logger.error(`[Voice] Track failed (${track.title}):`, error);
-            session.index += 1;
-            setTimeout(playIndex, 1_000);
-        }
-    };
+        })().catch(error => logger.warn(
+            `[Voice] Track start notification failed (${track.title}): ${error instanceof Error ? error.message : String(error)}`,
+        ));
+    });
 
     player.on(AudioPlayerStatus.Idle, () => {
         if (session.stopped) return;
+        const override = session.nextOverride;
+        const elapsed = playbackStartedAt ? Date.now() - playbackStartedAt : 0;
+        if (override === undefined && elapsed < minimumHealthyPlaybackMs && registerFailure() <= 2) {
+            logger.warn(
+                `[Voice] ${guildId}: ${session.tracks![session.index]?.title || 'track'} ended after ${elapsed}ms; retrying same track.`,
+            );
+            setTimeout(playIndex, 3_000);
+            return;
+        }
         if (session.history[session.history.length - 1] !== session.index) session.history.push(session.index);
-        session.index = session.nextOverride ?? session.index + 1;
+        const nextIndex = override ?? session.index + 1;
+        const changingTrack = nextIndex !== session.index;
+        session.index = nextIndex;
         session.nextOverride = undefined;
+        playbackStartedAt = 0;
+        if (changingTrack) {
+            announcedIndex = -1;
+            resetRetries();
+        }
         playIndex();
     });
     player.on('error', () => {
         if (session.stopped) return;
         // A transient stream/FFmpeg error should not skip the current surah:
         // retry the same track a couple of times before advancing.
-        sameTrackRetries += 1;
-        session.nextOverride = sameTrackRetries > 2 ? session.index + 1 : session.index;
+        session.nextOverride = registerFailure() > 2 ? session.index + 1 : session.index;
         player.stop();
     });
     await playIndex();

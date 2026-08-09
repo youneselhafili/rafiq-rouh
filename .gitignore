@@ -1,6 +1,7 @@
 node_modules/
 dist/
 /logs/
+/data/.rafiq-primary.lock
 
 .env
 .env.*

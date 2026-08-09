@@ -1,9 +1,10 @@
-﻿import {
-    AttachmentBuilder,
+import {
     ChatInputCommandInteraction,
     EmbedBuilder,
     PermissionFlagsBits,
     SlashCommandBuilder,
+    StringSelectMenuBuilder,
+    ActionRowBuilder,
 } from 'discord.js';
 import { execute as setupAdhan } from '../adhan/setupAdhan';
 import { execute as setupAdhkar } from '../adhkar/setupAdhkar';
@@ -14,10 +15,9 @@ import { execute as setupQuran } from '../quran/setupQuran';
 import { execute as setupLogs } from '../logs/setupLogs';
 import { execute as setupRoles } from '../roles/setupRoles';
 import { execute as setupDm } from '../dm/setupDm';
+import { UI_COLORS } from '../../utils/uiRenderer';
 
-const QURAN_PAGE_BASE_URL = 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/kfgqpc/hafs-wasat';
-
-const CHANNEL_SETUPS: Record<string, (interaction: ChatInputCommandInteraction) => Promise<void>> = {
+const CHANNEL_SETUPS: Record<string, (interaction: any) => Promise<void>> = {
     adhan: setupAdhan,
     adhkar: setupAdhkar,
     salawat: setupSalawat,
@@ -29,67 +29,65 @@ const CHANNEL_SETUPS: Record<string, (interaction: ChatInputCommandInteraction) 
     dm: setupDm,
 };
 
+const SYSTEM_OPTIONS = [
+    { label: 'الأذان', value: 'adhan', emoji: '🕌', description: 'القنوات والمناطق والصوت والإشعارات' },
+    { label: 'الأذكار', value: 'adhkar', emoji: '📿', description: 'قنوات الأذكار وجدولتها' },
+    { label: 'الصلاة على النبي ﷺ', value: 'salawat', emoji: '🌿', description: 'قناة وجدولة رسائل الصلاة على النبي' },
+    { label: 'الجمعة وسورة الكهف', value: 'jumuah', emoji: '🌟', description: 'رسائل الجمعة وتشغيل سورة الكهف' },
+    { label: 'الختمة اليومية', value: 'khatma', emoji: '📖', description: 'قناة وصفحات الختمة اليومية' },
+    { label: 'إذاعة القرآن الصوتية', value: 'quran', emoji: '📻', description: 'القناة الصوتية ووضع 24/24' },
+    { label: 'سجلات البوت', value: 'logs', emoji: '📋', description: 'قناة سجلات الأحداث والإعدادات' },
+    { label: 'رتب المنشن', value: 'roles', emoji: '🏷️', description: 'رتب إشعارات أنظمة البوت' },
+    { label: 'لوحة الرسائل الخاصة', value: 'dm', emoji: '✉️', description: 'نشر لوحة إعدادات الرسائل الخاصة' },
+];
+
+function buildSetupChannelsPanel() {
+    const embed = new EmbedBuilder()
+        .setColor(UI_COLORS.BRAND)
+        .setTitle('⚙️ مركز إعداد قنوات البوت')
+        .setDescription(
+            'اختَر النظام من القائمة أسفله لفتح لوحة إعداده الخاصة.\n\n' +
+            'كل تغيير يبقى مؤقتًا حتى تضغط **حفظ** داخل لوحة النظام.',
+        )
+        .addFields(
+            { name: '🕌 العبادات والتذكير', value: 'الأذان • الأذكار • الصلاة على النبي ﷺ • الجمعة • الختمة', inline: false },
+            { name: '📻 الصوت والإدارة', value: 'إذاعة القرآن • السجلات • الرتب • الرسائل الخاصة', inline: false },
+        )
+        .setFooter({ text: 'لوحة خاصة بك — اختَر نظامًا للمتابعة' });
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId('setup_channels_select')
+        .setPlaceholder('اختَر النظام الذي تريد إعداده')
+        .setMinValues(1)
+        .setMaxValues(1)
+        .addOptions(SYSTEM_OPTIONS);
+
+    return { embeds: [embed], components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)] };
+}
+
 export const data = new SlashCommandBuilder()
-    .setName('setup')
-    .setDescription('مركز إعداد قنوات أنظمة البوت ومعاينة صفحات القرآن')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addSubcommand(subcommand => subcommand
-        .setName('channel')
-        .setDescription('فتح إعداد قناة أي نظام من مكان واحد')
-        .addStringOption(option => option
-            .setName('system')
-            .setDescription('النظام الذي تريد إعداده')
-            .setRequired(true)
-            .addChoices(
-                { name: 'الأذان', value: 'adhan' },
-                { name: 'الأذكار', value: 'adhkar' },
-                { name: 'الصلاة على النبي ﷺ', value: 'salawat' },
-                { name: 'الجمعة وسورة الكهف', value: 'jumuah' },
-                { name: 'الختمة اليومية', value: 'khatma' },
-                { name: 'إذاعة القرآن الصوتية', value: 'quran' },
-                { name: 'سجلات البوت', value: 'logs' },
-                { name: 'رتب المنشن', value: 'roles' },
-                { name: 'لوحة الرسائل الخاصة', value: 'dm' },
-            )))
-    .addSubcommand(subcommand => subcommand
-        .setName('quran_preview')
-        .setDescription('معاينة إرسال صورة صفحة من المصحف بدون تغيير الإعدادات')
-        .addIntegerOption(option => option
-            .setName('page')
-            .setDescription('رقم الصفحة من 1 إلى 604 (عشوائي إذا تُرك فارغاً)')
-            .setMinValue(1)
-            .setMaxValue(604)
-            .setRequired(false)));
+    .setName('setup_channels')
+    .setDescription('فتح لوحة إعداد قنوات وأنظمة البوت')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.inGuild()) {
         await interaction.reply({ content: '❌ هذا الأمر يعمل داخل السيرفر فقط.', flags: 64 });
         return;
     }
+    await interaction.reply({ ...buildSetupChannelsPanel(), flags: 64 });
+}
 
-    const subcommand = interaction.options.getSubcommand();
-    if (subcommand === 'channel') {
-        const system = interaction.options.getString('system', true);
-        const openSetup = CHANNEL_SETUPS[system];
-        if (!openSetup) {
-            await interaction.reply({ content: '❌ نظام الإعداد غير معروف.', flags: 64 });
-            return;
-        }
-        await openSetup(interaction);
+export async function handleSetupChannelsInteraction(interaction: any) {
+    if (!interaction.isStringSelectMenu?.() || interaction.customId !== 'setup_channels_select') return;
+    if (!interaction.inGuild?.() || !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        await interaction.reply({ content: '❌ تحتاج صلاحية إدارة السيرفر لاستعمال هذه اللوحة.', flags: 64 });
         return;
     }
-
-    await interaction.deferReply({ flags: 64 });
-    const page = interaction.options.getInteger('page') || Math.floor(Math.random() * 604) + 1;
-    const filename = `quran_page_${page}.jpg`;
-    const embed = new EmbedBuilder()
-        .setColor(0x2ecc71)
-        .setTitle('📖 معاينة صفحة من المصحف')
-        .setDescription(`هذه معاينة خاصة للصفحة **${page} / 604** ولا تغيّر التقدم أو إعدادات الختمة.`)
-        .setImage(`attachment://${filename}`)
-        .setFooter({ text: 'إذا ظهرت الصفحة هنا فإرسال صور القرآن يعمل بشكل صحيح.' });
-    await interaction.editReply({
-        embeds: [embed],
-        files: [new AttachmentBuilder(`${QURAN_PAGE_BASE_URL}/${page}.jpg`, { name: filename })],
-    });
+    const openSetup = CHANNEL_SETUPS[interaction.values[0]];
+    if (!openSetup) {
+        await interaction.reply({ content: '❌ نظام الإعداد غير معروف.', flags: 64 });
+        return;
+    }
+    await openSetup(interaction);
 }

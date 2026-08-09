@@ -160,6 +160,11 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
 
     const secondRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
+            .setCustomId('khatma_setup_preview_page')
+            .setLabel('معاينة صفحة القرآن')
+            .setEmoji('🖼️')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
             .setCustomId('khatma_setup_save')
             .setLabel('حفظ')
             .setEmoji('💾')

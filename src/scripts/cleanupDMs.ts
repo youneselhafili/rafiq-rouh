@@ -112,7 +112,7 @@ async function run() {
                         )
                         .setThumbnail(client.user?.displayAvatarURL() ?? null)
                         .setFooter({
-                            text: 'رفيق الروح • المطوّر: يونس الحفيلي  •  جزاكم الله خيراً ❤️',
+                            text: 'رفيق الروح • المطوّر: يونس الحافلي  •  جزاكم الله خيراً ❤️',
                             iconURL: client.user?.displayAvatarURL(),
                         })
                         .setTimestamp();

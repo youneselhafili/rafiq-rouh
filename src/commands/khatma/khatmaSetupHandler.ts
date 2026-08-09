@@ -1,7 +1,9 @@
 import {
     ActionRowBuilder,
+    AttachmentBuilder,
     ButtonBuilder,
     ButtonStyle,
+    EmbedBuilder,
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
@@ -9,7 +11,9 @@ import {
 } from 'discord.js';
 import { KhatmaMode, KhatmaState } from '../../types';
 import { activeKhatmaSetups, buildKhatmaSetupPayload } from './setupKhatma';
-import { calculatePagesPerDay, setGuildKhatma, deleteGuildKhatma } from '../../services/khatmaService';
+import {
+    calculatePagesPerDay, setGuildKhatma, deleteGuildKhatma, QURAN_PAGE_IMAGE_BASE_URL,
+} from '../../services/khatmaService';
 import { getUserDMConfig, updateUserDMConfig } from '../../services/dmSubscriptionService';
 import { sendAuditLog } from '../../services/auditLogService';
 import { logger } from '../../utils/logger';
@@ -105,6 +109,22 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
             .setTitle('اختيار قناة الختمة بالـID')
             .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
         await interaction.showModal(modal);
+        return;
+    }
+
+    if (id === 'khatma_setup_preview_page') {
+        const page = Math.max(1, Math.min(604, session.currentPage || 1));
+        const filename = `quran_page_${page}.jpg`;
+        await interaction.deferReply({ flags: 64 });
+        await interaction.editReply({
+            embeds: [new EmbedBuilder()
+                .setColor(0x2ecc71)
+                .setTitle('📖 معاينة صفحة الختمة')
+                .setDescription(`هذه معاينة للصفحة الحالية **${page} / 604** ولا تغيّر تقدم الختمة.`)
+                .setImage(`attachment://${filename}`)
+                .setFooter({ text: 'اضغط حفظ في لوحة الختمة لتطبيق تغييرات الإعداد.' })],
+            files: [new AttachmentBuilder(`${QURAN_PAGE_IMAGE_BASE_URL}/${page}.jpg`, { name: filename })],
+        });
         return;
     }
 
