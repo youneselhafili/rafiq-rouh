@@ -4,7 +4,7 @@ import moment from 'moment-timezone';
 import { AttachmentBuilder, Client, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { ALADHAN_API_BASE, BOT_FOOTER, COLORS, PRAYER_KEYS, PRAYER_NAMES } from '../utils/constants';
 import { generateAdhanImage, generateAdhanWarningImage, generatePrayerCard } from './canvasService';
-import { fetchYabiladiPrayerTimes } from './yabiladiService';
+import { fetchYabiladiPrayerTimes, clearYabiladiMonthlyCache } from './yabiladiService';
 import { getAllManagedAdhanGuilds, ManagedAdhanZone } from './adhanZoneService';
 import {
     auditAdhanAudienceRoles, getAdhanAudioConfig, playScheduledAdhan, resolveAdhanAudience,
@@ -447,7 +447,10 @@ async function refreshAllSchedules(client: Client) {
 
 export function initAdhanCrons(client: Client): void {
     refreshAllSchedules(client).catch(error => logger.error('[Adhan] Initial schedule failed:', error));
-    cron.schedule('1 0 * * *', () => refreshAllSchedules(client).catch(error => logger.error('[Adhan] Daily refresh failed:', error)));
+    cron.schedule('1 0 * * *', () => {
+        clearYabiladiMonthlyCache();
+        refreshAllSchedules(client).catch(error => logger.error('[Adhan] Daily refresh failed:', error));
+    });
     cron.schedule('* * * * *', () => scanDueAdhanEvents(client).catch(error => logger.error('[Adhan] Recovery scan failed:', error)));
     setTimeout(() => scanDueAdhanEvents(client).catch(error => logger.error('[Adhan] Startup recovery scan failed:', error)), 20_000).unref();
     if (!audienceAuditTimer) audienceAuditTimer = setInterval(() => auditAdhanAudienceRoles(client).catch(() => {}), 60 * 60 * 1000);
