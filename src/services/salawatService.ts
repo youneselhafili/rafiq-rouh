@@ -29,12 +29,21 @@ export interface SalawatStats {
 }
 
 const RUNTIME_MODULE = 'salawatRuntimeV2';
-const SALAWAT_FILE = path.join(process.cwd(), 'data', 'raw', 'salawat.txt');
+function resolveSalawatFile(): string {
+    const candidates = [
+        path.resolve(process.cwd(), 'data/raw/salawat.txt'),
+        path.resolve(__dirname, '../../../data/raw/salawat.txt'), // compiled dist/src/services
+        path.resolve(__dirname, '../../data/raw/salawat.txt'), // ts-node src/services
+    ];
+    return candidates.find(candidate => fs.existsSync(candidate)) || candidates[0];
+}
+
+const SALAWAT_FILE = resolveSalawatFile();
 const activeTimers = new Map<string, NodeJS.Timeout>();
 const activeCrons = new Map<string, cron.ScheduledTask[]>();
 const activeDmSends = new Set<string>();
 const activeGuildSends = new Set<string>();
-const SALAWAT_DEDUP_WINDOW_MS = 2 * 60 * 1000;
+const SALAWAT_DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
 export function loadSalawatTexts(): string[] {
     try {
@@ -87,6 +96,18 @@ function isRecent(value?: string): boolean {
     return Number.isFinite(timestamp) && Date.now() - timestamp < SALAWAT_DEDUP_WINDOW_MS;
 }
 
+async function channelHasRecentSalawat(channel: any, client: Client): Promise<boolean> {
+    if (!channel?.messages?.fetch) return false;
+    const messages = await channel.messages.fetch({ limit: 10 }).catch(() => null);
+    if (!messages) return false;
+    const now = Date.now();
+    return messages.some((message: any) =>
+        message.author?.id === client.user?.id &&
+        now - Number(message.createdTimestamp || 0) < SALAWAT_DEDUP_WINDOW_MS &&
+        message.embeds?.some((embed: any) => embed.title?.includes('الصلاة على النبي')),
+    );
+}
+
 async function claimSalawatSend(guildId: string): Promise<boolean> {
     const claimedAt = new Date().toISOString();
     if (isFirestoreAvailable()) {
@@ -119,6 +140,10 @@ export async function sendSalawatReminder(client: Client, guildId: string, chann
         }
         const channel = await client.channels.fetch(channelId).catch(() => null);
         if (!channel?.isTextBased() || !('send' in channel)) return false;
+        if (await channelHasRecentSalawat(channel, client)) {
+            logger.info(`[Salawat] Skipped reminder for ${guildId}; a recent Salawat message already exists in ${channelId}.`);
+            return false;
+        }
         const text = await chooseText(guildId, true);
         const file = await tryBuildAttachment(() => generateSalawatImage(text), 'salawat.png');
         const rolesConfig = await getRolesConfig(guildId);

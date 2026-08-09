@@ -46,13 +46,10 @@ async function bootstrap() {
     try {
         logger.info('🚀 Starting رفيق الروح bot...');
 
-        // 1. Initialize Firebase (optional — fallback to file-based if not configured)
-        try {
-            initializeFirebase();
-        } catch (error) {
-            logger.warn(`Firebase not configured: ${error instanceof Error ? error.message : 'unknown error'}`);
-            logger.warn('Guild configs will use local file-based storage (data/guilds/).');
-        }
+        // 1. Firebase is required in production. Continuing without it creates
+        // isolated schedulers that cannot share delivery locks and may duplicate
+        // reminders across processes or deployments.
+        initializeFirebase();
 
         // 2. Initialize Content Catalogs
         initContentService();
