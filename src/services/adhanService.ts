@@ -262,9 +262,13 @@ async function sendAudiencePayload(client: Client, guildId: string, channelId: s
             ? { parse: ['roles'] as const, users: audience.userIds }
             : { parse: ['roles', 'users'] as const };
         
-    const imagePayload = payload.embeds?.length && !payload.files?.length
-        ? { embeds: payload.embeds }
-        : { files: payload.files || [] };
+    // Discord needs both parts in the same message: the embed provides the
+    // notification text and references the generated canvas via attachment://.
+    // Choosing only `files` when the canvas succeeds turns it into a bare image.
+    const imagePayload = {
+        ...(payload.embeds?.length ? { embeds: payload.embeds } : {}),
+        ...(payload.files?.length ? { files: payload.files } : {}),
+    };
     const firstMention = chunks[0].trim();
 
     try {
