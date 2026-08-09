@@ -1,4 +1,4 @@
-﻿import * as dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { initializeFirebase } from '../config/firebase';
 import { isFirestoreAvailable } from '../services/guildConfigService';
@@ -105,7 +105,7 @@ async function run() {
                                 value: 
                                     `💳 **عبر PayPal:**\nاضغط على الزر بالأسفل للانتقال لصفحة الدفع مباشرة.\n\n` +
                                     `🏦 **عبر تحويل بنكي (CIH Bank):**\n` +
-                                    `• **الاسم:** يونس الحفيلي\n` +
+                                    `• **الاسم:** YOUNES ELHAFILI\n` +
                                     `• **رقم الحساب (RIB):**\n\`${CIH_RIB}\``,
                                 inline: false,
                             }

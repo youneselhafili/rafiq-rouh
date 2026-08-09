@@ -41,7 +41,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
                 value: 
                     `💳 **عبر PayPal:**\nاضغط على الزر بالأسفل للانتقال لصفحة الدفع مباشرة.\n\n` +
                     `🏦 **عبر تحويل بنكي (CIH Bank):**\n` +
-                    `• **الاسم:** يونس الحفيلي\n` +
+                    `• **الاسم:** YOUNES ELHAFILI\n` +
                     `• **رقم الحساب (RIB):**\n\`${CIH_RIB}\``,
                 inline: false,
             }
