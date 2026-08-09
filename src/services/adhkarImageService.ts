@@ -109,7 +109,17 @@ function renderPage(text: string, title: string, page: number, total: number, so
 export function generateAdaptiveAdhkarImages(text: string, title: string, source?: string, count?: number): any[] {
     const measure = createCanvas(WIDTH, HEIGHT).getContext('2d');
     const pages = paginate(measure, text.trim());
-    return pages.map((pageText, index) => renderPage(pageText, title, index + 1, pages.length, source, count));
+    const continuationTitle = /(?:دعاء|أدعية|الدعاء)/u.test(`${title} ${text}`)
+        ? 'تكملة الدعاء'
+        : 'تكملة الذكر';
+    return pages.map((pageText, index) => renderPage(
+        pageText,
+        index === 0 ? title : continuationTitle,
+        index + 1,
+        pages.length,
+        source,
+        count,
+    ));
 }
 
 export function generateNamesGridImage(names: string[], page: number, totalPages: number): any {
