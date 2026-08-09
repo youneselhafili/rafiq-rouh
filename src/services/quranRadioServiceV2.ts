@@ -7,7 +7,7 @@ import { getAdvancedConfig, setAdvancedConfig } from './advancedConfigService';
 import { getAllRadios, getAllReciters, getReciterById } from '../quran/quranRegistry';
 import { LIVE_MADINA_URL, LIVE_MAKKAH_URL } from '../utils/constants';
 import {
-    getPlaybackSnapshot, nextGuildTrack, playRadioSource, playTrackQueue, previousGuildTrack,
+    getPlaybackSnapshot, getVoicePlaybackHealth, nextGuildTrack, playRadioSource, playTrackQueue, previousGuildTrack,
     recoverGuildVoiceConnection, resumePlayback, stopGuildPlayback, toggleGuildPause,
     PlaybackSnapshot, VoiceTrack,
 } from './voicePlaybackService';
@@ -1051,7 +1051,29 @@ export async function enforceQuran24Cycle(client: Client, guildId: string, force
         }
     }
     if (humans.size > 0 && state.userOverride && !force) return;
-    if (!force && state.mode === 'QuranKareem') return;
+    if (!force && state.mode === 'QuranKareem') {
+        // ─── Watchdog: detect zombie/silent playback ───────────────────
+        // If the bot appears connected but audio has frozen (stream stalled
+        // after 2+ hours), fall through to restart instead of returning.
+        if (!state.isPaused) {
+            const health = getVoicePlaybackHealth(guildId);
+            const isHealthy = health.active
+                && (health.connectionStatus as string) === 'ready'
+                && (health.playerStatus as string) === 'playing';
+            if (!isHealthy) {
+                logger.warn(
+                    `[QuranV2] ${guildId}: Zombie/silent playback detected ` +
+                    `(conn=${health.connectionStatus ?? 'none'}, player=${health.playerStatus ?? 'none'}). ` +
+                    `Restarting stream...`,
+                );
+                // Fall through → startRandomQuranKareem will restart
+            } else {
+                return; // Audio is healthy, nothing to do
+            }
+        } else {
+            return; // Bot is intentionally paused
+        }
+    }
     state.controllerId = humans.first()?.id;
     state.userOverride = false;
     await startRandomQuranKareem(client, state, channel, false);
