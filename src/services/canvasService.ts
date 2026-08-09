@@ -525,7 +525,9 @@ export async function generateSalawatImage(text: string = 'اللهم صل وس�
 
     ctx.fillStyle = '#4CAF50';
     ctx.font = '50px Cairo';
-    ctx.fillText('صلوا على النبي ﷺ', CANVAS_WIDTH / 2, 180);
+    ctx.fillText('صلوا على النبي', CANVAS_WIDTH / 2, 160);
+    ctx.font = '30px Cairo';
+    ctx.fillText('صلى الله عليه وسلم', CANVAS_WIDTH / 2, 210);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '42px Tajawal';
