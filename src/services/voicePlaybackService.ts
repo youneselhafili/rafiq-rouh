@@ -282,7 +282,7 @@ async function resourceFromUrl(url: string) {
         };
     }
     if (/^https?:\/\//i.test(url)) {
-        const response = await axios.get(url, { responseType: 'stream', timeout: 20_000 });
+        const response = await axios.get(url, { responseType: 'stream' });
         return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
     }
     return { resource: createAudioResource(url) };
