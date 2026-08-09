@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { ChildProcess, spawn } from 'child_process';
 import ffmpegPath from 'ffmpeg-static';
 import {
@@ -251,39 +250,50 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
     return { connection, player };
 }
 
+function spawnOggTranscoder(url: string, label: string): ChildProcess {
+    if (!ffmpegPath) throw new Error('FFmpeg executable is unavailable for remote playback.');
+    const transcoder = spawn(ffmpegPath, [
+        '-hide_banner', '-loglevel', 'warning',
+        '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+        '-reconnect_on_network_error', '1',
+        '-i', url, '-map', '0:a:0', '-vn',
+        '-c:a', 'libopus', '-ar', '48000', '-ac', '2', '-b:a', '96k', '-vbr', 'on', '-application', 'audio',
+        '-f', 'ogg', 'pipe:1',
+    ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    if (!transcoder.stdout) {
+        try { transcoder.kill(); } catch {}
+        throw new Error('FFmpeg did not expose an audio output stream.');
+    }
+    let stderr = '';
+    transcoder.stderr?.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-2000); });
+    transcoder.once('error', error => {
+        logger.warn(`[Voice] ${label} transcoder process error: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    transcoder.once('exit', code => {
+        if (code && !transcoder.killed) logger.warn(`[Voice] ${label} transcoder exited with code ${code}: ${stderr.trim()}`);
+    });
+    return transcoder;
+}
+
 async function resourceFromUrl(url: string) {
     const isHLS = /\.m3u8(?:$|\?)/i.test(url);
     const isLiveStream = /radiojar\.com|icecast|shoutcast|qurango\.net\/radio|backup\.qurango|m3u8/i.test(url);
 
-    if (isHLS || isLiveStream) {
-        if (!ffmpegPath) throw new Error('FFmpeg executable is unavailable for HLS/live playback.');
-        const transcoder = spawn(ffmpegPath, [
-            '-hide_banner', '-loglevel', 'warning',
-            '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-            '-i', url, '-map', '0:a:0', '-vn',
-            '-c:a', 'libopus', '-ar', '48000', '-ac', '2', '-b:a', '96k', '-vbr', 'on', '-application', 'audio',
-            '-f', 'ogg', 'pipe:1',
-        ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    if (isHLS || isLiveStream || /^https?:\/\//i.test(url)) {
+        // Feed the URL directly to FFmpeg with auto-reconnect for HLS,
+        // live streams, and plain MP3 files alike. Piping the HTTP stream
+        // through axios/Arbitrary stops as soon as the server closes the
+        // connection, which cuts the current surah short and jumps to the
+        // next one. FFmpeg reconnects instead, so the recitation plays fully.
+        const transcoder = spawnOggTranscoder(url, isHLS ? 'HLS' : isLiveStream ? 'live' : 'MP3');
         if (!transcoder.stdout) {
             try { transcoder.kill(); } catch {}
             throw new Error('FFmpeg did not expose an audio output stream.');
         }
-        let stderr = '';
-        transcoder.stderr?.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-2000); });
-        transcoder.once('error', error => {
-            logger.warn(`[Voice] Live transcoder process error: ${error instanceof Error ? error.message : String(error)}`);
-        });
-        transcoder.once('exit', code => {
-            if (code && !transcoder.killed) logger.warn(`[Voice] Live transcoder exited with code ${code}: ${stderr.trim()}`);
-        });
         return {
             resource: createAudioResource(transcoder.stdout, { inputType: StreamType.OggOpus }),
             transcoder,
         };
-    }
-    if (/^https?:\/\//i.test(url)) {
-        const response = await axios.get(url, { responseType: 'stream' });
-        return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
     }
     return { resource: createAudioResource(url) };
 }
@@ -335,6 +345,8 @@ export async function playTrackQueue(
     };
     active.set(guildId, session);
 
+    let sameTrackRetries = 0;
+
     const playIndex = async () => {
         if (session.stopped || active.get(guildId) !== session) return;
         if (session.index >= session.tracks!.length) {
@@ -353,6 +365,7 @@ export async function playTrackQueue(
             const prepared = await resourceFromUrl(track.url);
             stopTranscoder(session);
             session.transcoder = prepared.transcoder;
+            sameTrackRetries = 0;
             player.play(prepared.resource);
             logger.success(`[Voice] Track playback started: ${track.title}${track.subtitle ? ` — ${track.subtitle}` : ''}.`);
         } catch (error) {
@@ -364,12 +377,19 @@ export async function playTrackQueue(
 
     player.on(AudioPlayerStatus.Idle, () => {
         if (session.stopped) return;
-        session.history.push(session.index);
+        if (session.history[session.history.length - 1] !== session.index) session.history.push(session.index);
         session.index = session.nextOverride ?? session.index + 1;
         session.nextOverride = undefined;
         playIndex();
     });
-    player.on('error', () => player.stop());
+    player.on('error', () => {
+        if (session.stopped) return;
+        // A transient stream/FFmpeg error should not skip the current surah:
+        // retry the same track a couple of times before advancing.
+        sameTrackRetries += 1;
+        session.nextOverride = sameTrackRetries > 2 ? session.index + 1 : session.index;
+        player.stop();
+    });
     await playIndex();
 }
 
