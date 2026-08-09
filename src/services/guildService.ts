@@ -52,6 +52,7 @@ function getOrCreateGuild(guildId: string): GuildSettings {
         salawat: [],
         quranRadio: null,
         donate: null,
+        khatma: null,
         createdAt: nowISO(),
         updatedAt: nowISO(),
     };

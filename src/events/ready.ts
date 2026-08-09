@@ -7,6 +7,7 @@ import { initAdhkarCrons } from '../services/adhkarService';
 import { logger } from '../utils/logger';
 import { initializeQuranSystems } from '../services/quranRadioServiceV2';
 import { initPersonalDMScheduler } from '../services/personalDmSchedulerService';
+import { startKhatmaCron } from '../services/khatmaService';
 import { startDashboardApi } from '../services/dashboardApiService';
 
 export const name = Events.ClientReady;
@@ -55,6 +56,7 @@ export async function execute(client: ExtendedClient) {
     await initSalawatCrons(client);
     await initAdhkarCrons(client);
     initPersonalDMScheduler(client);
+    startKhatmaCron(client);
     logger.success('Background jobs initialized.');
 }
 

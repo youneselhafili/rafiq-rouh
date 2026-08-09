@@ -1,4 +1,4 @@
-﻿import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { logger } from '../utils/logger';
 
 export type DMLanguage = 'ar' | 'darija' | 'en' | 'fr';
@@ -56,6 +56,14 @@ export interface UserDMConfig extends UserDMSubscriptions {
         kahf: boolean;
         readingReminder: boolean;
         reminderTime: string;
+    };
+    khatma?: {
+        enabled: boolean;
+        currentPage: number;
+        pagesPerDay: number;
+        mode: import('../types').KhatmaMode;
+        ramadanKhatmas?: number;
+        updatedAt?: string;
     };
     runtime?: {
         sentEvents?: string[];
@@ -157,6 +165,7 @@ function mergeConfig(data: any = {}): UserDMConfig {
         salawatConfig: { ...DEFAULT_DM_CONFIG.salawatConfig, ...(data.salawatConfig || {}), enabled: data.salawatConfig?.enabled ?? legacy.salawat, fixedTimes: Array.isArray(data.salawatConfig?.fixedTimes) ? data.salawatConfig.fixedTimes : [] },
         jumuahConfig: { ...DEFAULT_DM_CONFIG.jumuahConfig, ...(data.jumuahConfig || {}), enabled: data.jumuahConfig?.enabled ?? legacy.jumuah },
         quranConfig: { ...DEFAULT_DM_CONFIG.quranConfig, ...(data.quranConfig || {}) },
+        khatma: data.khatma && typeof data.khatma === 'object' ? { ...(data.khatma as any) } : undefined,
         runtime: { ...DEFAULT_DM_CONFIG.runtime, ...(data.runtime || {}), sentEvents: data.runtime?.sentEvents || [] },
         dashboard: data.dashboard ? { ...data.dashboard } : undefined,
     };
@@ -285,5 +294,10 @@ export async function getSubscribedUsers(feature: keyof UserDMSubscriptions, fil
     return userIds;
 }
 
-
-
+export async function getAllUsersWithActiveKhatma(): Promise<{ userId: string; config: UserDMConfig }[]> {
+    const users: { userId: string; config: UserDMConfig }[] = [];
+    for (const { userId, config } of await getAllDMUserConfigs()) {
+        if (config.khatma?.enabled) users.push({ userId, config });
+    }
+    return users;
+}

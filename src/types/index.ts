@@ -76,6 +76,21 @@ export interface GuildDonateConfig {
     enabled: boolean;
 }
 
+export type KhatmaMode = 'custom' | 'week' | 'month' | '3_months' | '6_months' | 'ramadan';
+
+export interface KhatmaState {
+    id: string; // Guild ID or User ID
+    isGuild: boolean;
+    channelId?: string; // Only for guilds
+    currentPage: number;
+    pagesPerDay: number;
+    mode: KhatmaMode;
+    ramadanKhatmas?: number; // Only for ramadan mode
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface GuildSettings {
     guildId: string;
     adhkar: GuildAdhkarConfig[];
@@ -83,6 +98,7 @@ export interface GuildSettings {
     salawat: GuildSalawatConfig[];
     quranRadio: GuildQuranRadioConfig | null;
     donate: GuildDonateConfig | null;
+    khatma: KhatmaState | null;
     lastDonateBroadcastAt?: string;
     firstDonateBroadcastSent?: boolean;
     createdAt: string;

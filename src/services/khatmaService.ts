@@ -1,0 +1,160 @@
+import { Client, EmbedBuilder, AttachmentBuilder, TextChannel } from 'discord.js';
+import * as cron from 'node-cron';
+import { getAdvancedConfig, setAdvancedConfig, deleteAdvancedConfig } from './advancedConfigService';
+import { KhatmaState, KhatmaMode } from '../types';
+import { getAllUsersWithActiveKhatma, getUserDMConfig, updateUserDMConfig } from './dmSubscriptionService';
+import { logger } from '../utils/logger';
+
+const KHATMA_MODULE = 'khatma';
+
+const IMAGE_BASE_URL = 'https://raw.githubusercontent.com/QuranHub/quran-pages-images/main/kfgqpc/hafs-wasat';
+
+const KHATMA_DUA = `اللَّهُمَّ ارْحَمْنِي بالقُرْءَانِ وَاجْعَلهُ لِي إِمَاماً وَنُوراً وَهُدًى وَرَحْمَةً
+اللَّهُمَّ ذَكِّرْنِي مِنْهُ مَانَسِيتُ وَعَلِّمْنِي مِنْهُ مَاجَهِلْتُ وَارْزُقْنِي تِلاَوَتَهُ آنَاءَ اللَّيْلِ وَأَطْرَافَ النَّهَارِ وَاجْعَلْهُ لِي حُجَّةً يَارَبَّ العَالَمِينَ
+اللَّهُمَّ أَصْلِحْ لِي دِينِي الَّذِي هُوَ عِصْمَةُ أَمْرِي، وَأَصْلِحْ لِي دُنْيَايَ الَّتِي فِيهَا مَعَاشِي، وَأَصْلِحْ لِي آخِرَتِي الَّتِي فِيهَا مَعَادِي، وَاجْعَلِ الحَيَاةَ زِيَادَةً لِي فِي كُلِّ خَيْرٍ وَاجْعَلِ المَوْتَ رَاحَةً لِي مِنْ كُلِّ شَرٍّ
+اللَّهُمَّ اجْعَلْ خَيْرَ عُمْرِي آخِرَهُ وَخَيْرَ عَمَلِي خَوَاتِمَهُ وَخَيْرَ أَيَّامِي يَوْمَ أَلْقَاكَ فِيهِ
+اللَّهُمَّ إِنِّي أَسْأَلُكَ عِيشَةً هَنِيَّةً وَمِيتَةً سَوِيَّةً وَمَرَدًّا غَيْرَ مُخْزٍ وَلاَ فَاضِحٍ
+اللَّهُمَّ إِنِّي أَسْأَلُكَ خَيْرَ المَسْأَلةِ وَخَيْرَ الدُّعَاءِ وَخَيْرَ النَّجَاحِ وَخَيْرَ العِلْمِ وَخَيْرَ العَمَلِ وَخَيْرَ الثَّوَابِ وَخَيْرَ الحَيَاةِ وَخيْرَ المَمَاتِ وَثَبِّتْنِي وَثَقِّلْ مَوَازِينِي وَحَقِّقْ إِيمَانِي وَارْفَعْ دَرَجَتِي وَتَقَبَّلْ صَلاَتِي وَاغْفِرْ خَطِيئَاتِي وَأَسْأَلُكَ العُلَا مِنَ الجَنَّةِ`;
+
+const activeCronJobs = new Map<string, cron.ScheduledTask>();
+
+export async function getGuildKhatma(guildId: string): Promise<KhatmaState | null> {
+    return getAdvancedConfig<KhatmaState>(guildId, KHATMA_MODULE);
+}
+
+export async function setGuildKhatma(guildId: string, state: KhatmaState): Promise<void> {
+    await setAdvancedConfig(guildId, KHATMA_MODULE, state);
+}
+
+export async function deleteGuildKhatma(guildId: string): Promise<void> {
+    await deleteAdvancedConfig(guildId, KHATMA_MODULE);
+}
+
+export function calculatePagesPerDay(mode: KhatmaMode, ramadanKhatmas?: number): number {
+    switch (mode) {
+        case 'week': return Math.ceil(604 / 7);
+        case 'month': return Math.ceil(604 / 30);
+        case '3_months': return Math.ceil(604 / 90);
+        case '6_months': return Math.ceil(604 / 180);
+        case 'ramadan': return Math.ceil((604 * (ramadanKhatmas || 1)) / 30);
+        case 'custom': return 1; // Default, overridden in UI
+        default: return 1;
+    }
+}
+
+async function sendKhatmaPages(client: Client, state: KhatmaState): Promise<boolean> {
+    if (state.currentPage > 604 || state.currentPage < 1) state.currentPage = 1;
+    const pagesPerDay = Math.max(1, state.pagesPerDay || 1);
+    const pagesToSend = [];
+    const startPage = state.currentPage;
+    let endPage = startPage + pagesPerDay - 1;
+
+    let finished = false;
+    if (endPage >= 604) {
+        endPage = 604;
+        finished = true;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        pagesToSend.push(`${IMAGE_BASE_URL}/${i}.jpg`);
+    }
+
+    try {
+        let target: TextChannel | any;
+        if (state.isGuild) {
+            target = await client.channels.fetch(state.channelId!) as TextChannel;
+        } else {
+            const user = await client.users.fetch(state.id);
+            target = await user.createDM();
+        }
+
+        if (!target) return false;
+
+        // Send pages in batches of 5 to respect Discord attachment limits
+        for (let i = 0; i < pagesToSend.length; i += 5) {
+            const batch = pagesToSend.slice(i, i + 5);
+            const attachments = batch.map((url, index) => new AttachmentBuilder(url, { name: `page_${startPage + i + index}.jpg` }));
+            await target.send({ files: attachments });
+        }
+
+        state.currentPage = endPage + 1;
+
+        if (finished) {
+            const duaEmbed = new EmbedBuilder()
+                .setTitle('✨ دعاء ختم القرآن الكريم ✨')
+                .setDescription(KHATMA_DUA)
+                .setColor(0x2ecc71)
+                .setFooter({ text: 'تقبل الله منا ومنكم صالح الأعمال' });
+            
+            await target.send({ embeds: [duaEmbed] });
+            state.isActive = false; // Stop sending
+        }
+
+        if (state.isGuild) {
+            await setGuildKhatma(state.id, state);
+        } else {
+            const config = await getUserDMConfig(state.id);
+            if (config.khatma) {
+                config.khatma.currentPage = state.currentPage;
+                config.khatma.enabled = state.isActive;
+                await updateUserDMConfig(state.id, config);
+            }
+        }
+
+        return true;
+
+    } catch (error) {
+        logger.error(`Failed to send Khatma pages for ${state.id}: ${error}`);
+        return false;
+    }
+}
+
+export async function processAllKhatmas(client: Client) {
+    logger.info('Running daily Khatma process...');
+    // Process Guilds
+    for (const [guildId, guild] of client.guilds.cache) {
+        try {
+            const state = await getGuildKhatma(guildId);
+            if (state && state.isActive) {
+                await sendKhatmaPages(client, state);
+            }
+        } catch (error) {
+            logger.error(`Failed to process guild Khatma for ${guildId}: ${error}`);
+        }
+    }
+
+    // Process DMs
+    const users = await getAllUsersWithActiveKhatma();
+    for (const { userId, config } of users) {
+        const khatma = config.khatma;
+        if (!khatma || !khatma.enabled) continue;
+        const state: KhatmaState = {
+            id: userId,
+            isGuild: false,
+            currentPage: khatma.currentPage,
+            pagesPerDay: khatma.pagesPerDay || calculatePagesPerDay(khatma.mode, khatma.ramadanKhatmas),
+            mode: khatma.mode,
+            ramadanKhatmas: khatma.ramadanKhatmas,
+            isActive: true,
+            createdAt: khatma.updatedAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+        try {
+            await sendKhatmaPages(client, state);
+        } catch (error) {
+            logger.error(`Failed to process DM Khatma for ${userId}: ${error}`);
+        }
+    }
+}
+
+export function startKhatmaCron(client: Client) {
+    // Run every day at 08:00 AM Mecca time
+    const job = cron.schedule('0 8 * * *', () => {
+        processAllKhatmas(client);
+    }, {
+        timezone: 'Asia/Riyadh'
+    });
+    
+    activeCronJobs.set('daily_khatma', job);
+    logger.info('Started daily Khatma cron job (08:00 Mecca time)');
+}

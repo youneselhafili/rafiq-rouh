@@ -10,6 +10,7 @@ import { handleMyZoneInteraction } from '../commands/adhan/myZoneHandler';
 import { handleTestInteraction } from '../commands/test/testHandler';
 import { handleLogsSetupInteraction } from '../commands/logs/logsSetupHandler';
 import { handleJumuahSetupInteraction } from '../commands/jumuah/jumuahSetupHandler';
+import { handleKhatmaSetupInteraction } from '../commands/khatma/khatmaSetupHandler';
 import { sendAuditLog } from '../services/auditLogService';
 
 export const name = Events.InteractionCreate;
@@ -67,6 +68,8 @@ export async function execute(interaction: Interaction) {
                 await handleSalawatSetupInteraction(interaction as any);
             } else if (interaction.customId.startsWith('jumuah_setup_')) {
                 await handleJumuahSetupInteraction(interaction as any);
+            } else if (interaction.customId.startsWith('khatma_setup_')) {
+                await handleKhatmaSetupInteraction(interaction as any);
             } else if (interaction.customId.startsWith('logs_setup_')) {
                 await handleLogsSetupInteraction(interaction as any);
             } else if (interaction.customId.startsWith('roles_setup_modal_')) {
@@ -129,6 +132,11 @@ export async function execute(interaction: Interaction) {
 
             if (interaction.customId.startsWith('jumuah_setup_')) {
                 await handleJumuahSetupInteraction(interaction);
+                return;
+            }
+
+            if (interaction.customId.startsWith('khatma_setup_')) {
+                await handleKhatmaSetupInteraction(interaction);
                 return;
             }
 
