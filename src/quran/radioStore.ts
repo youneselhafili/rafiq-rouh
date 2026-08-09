@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { QuranRadioSource } from '../types';
 import { classifyQuranFile } from './quranClassifier';
-import { LIVE_MAKKAH_URL, LIVE_MADINA_URL } from '../utils/constants';
+// Removed LIVE_MAKKAH_URL and LIVE_MADINA_URL
 import { logger } from '../utils/logger';
 
 const URL_REGEX = /^https?:\/\//;
@@ -67,17 +67,4 @@ export function parseRadioFiles(filePaths: string[]): QuranRadioSource[] {
     return radios;
 }
 
-/**
- * Returns radio sources including live stations (Makkah, Madinah).
- */
-export function getRadiosWithLive(radios: QuranRadioSource[]): QuranRadioSource[] {
-    let idCounter = radios.length + 1;
-    const result = [...radios];
-    if (!result.some(radio => radio.name.includes('الحرم المكي'))) {
-        result.push({ id: `radio_live_${idCounter++}`, name: 'الحرم المكي مباشر', streamUrl: LIVE_MAKKAH_URL });
-    }
-    if (!result.some(radio => radio.name.includes('المسجد النبوي'))) {
-        result.push({ id: `radio_live_${idCounter++}`, name: 'المسجد النبوي مباشر', streamUrl: LIVE_MADINA_URL });
-    }
-    return result;
-}
+// getRadiosWithLive removed

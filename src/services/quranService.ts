@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import {
     joinVoiceChannel,
     createAudioPlayer,
@@ -11,7 +11,7 @@ import {
     StreamType,
 } from '@discordjs/voice';
 import { VoiceBasedChannel } from 'discord.js';
-import { LIVE_MAKKAH_URL, LIVE_MADINA_URL } from '../utils/constants';
+// Removed LIVE_MAKKAH_URL and LIVE_MADINA_URL
 import { logger } from '../utils/logger';
 import { getReciterByName, getReciterById, getRadioWithLive, getRadioById, searchReciters, getReciters, buildSurahUrls } from './contentService';
 
@@ -266,14 +266,7 @@ export async function streamRadio(
     return true;
 }
 
-export async function streamLive(
-    channel: VoiceBasedChannel,
-    type: 'makkah' | 'madina'
-): Promise<void> {
-    const url = type === 'makkah' ? LIVE_MAKKAH_URL : LIVE_MADINA_URL;
-    const label = type === 'makkah' ? 'الحرم المكي' : 'المسجد النبوي';
-    await streamRadio(channel, url, label);
-}
+// streamLive function removed
 
 export function stopAudio(guildId: string): boolean {
     const active = activeConnections.get(guildId);

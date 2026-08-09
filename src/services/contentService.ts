@@ -1,6 +1,6 @@
 import { AdhkarCategory, AdhkarItem, Reciter, RadioStation, Moshaf } from '../types';
 import * as catalog from '../bootstrap/catalogBuilder';
-import { LIVE_MAKKAH_URL, LIVE_MADINA_URL } from '../utils/constants';
+// LIVE_MAKKAH_URL and LIVE_MADINA_URL removed
 
 // ─── Initialization ───────────────────────────────────────────
 
@@ -77,14 +77,9 @@ export function getAllRadios(): RadioStation[] {
 }
 
 export function getRadioWithLive(): RadioStation[] {
-    let idCounter = catalog.getRadios().length + 1;
-    return [
-        ...catalog.getRadios(),
-        { id: idCounter++, name: 'الحرم المكي', url: LIVE_MAKKAH_URL, recent_date: '' },
-        { id: idCounter++, name: 'المسجد النبوي', url: LIVE_MADINA_URL, recent_date: '' },
-    ];
+    return catalog.getRadios();
 }
 
 export function getRadioByName(name: string): RadioStation | undefined {
-    return getRadioWithLive().find(r => r.name.includes(name));
+    return catalog.getRadios().find(r => r.name.includes(name));
 }

@@ -10,7 +10,6 @@ import {
     getActivePlayer,
     streamSurahs,
     streamRadio,
-    streamLive,
     stopAudio,
     fetchRadios,
     skipTrack,
@@ -124,14 +123,8 @@ export async function sendOrUpdatePanel(
 async function startDefaultSource(channel: VoiceBasedChannel, defaultSource: string, state: RadioState) {
     switch (defaultSource) {
     case 'makkah':
-        state.radioLabel = undefined;
-        state.radioUrl = undefined;
-        await streamLive(channel, 'makkah');
-        break;
     case 'madinah':
-        state.radioLabel = undefined;
-        state.radioUrl = undefined;
-        await streamLive(channel, 'madina');
+        // Legacy live streams removed
         break;
     case 'radio_saudi': {
         const radios = await fetchRadios();
@@ -298,18 +291,10 @@ export async function handleRadioInteraction(interaction: any) {
 
         if (interaction.isButton()) {
             switch (interaction.customId) {
-            case 'qr_btn_makkah': {
-                setStateFromSourceButton(state, member, 'Makkah');
-                const vc = getVoiceChannel(member);
-                if (vc) await streamLive(vc, 'makkah');
+            case 'qr_btn_makkah':
+            case 'qr_btn_madinah':
+                // Legacy live streams removed
                 break;
-            }
-            case 'qr_btn_madinah': {
-                setStateFromSourceButton(state, member, 'Madinah');
-                const vc = getVoiceChannel(member);
-                if (vc) await streamLive(vc, 'madina');
-                break;
-            }
             case 'qr_btn_radio_saudi': {
                 const radios = await fetchRadios();
                 const saudiRadio = radios.find(r => r.name.includes('السعودية'));

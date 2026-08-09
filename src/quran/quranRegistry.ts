@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { QuranReciterSource, QuranRadioSource, QuranSource, QuranContentType } from '../types';
 import { parseReciterFiles } from './reciterStore';
-import { parseRadioFiles, getRadiosWithLive } from './radioStore';
+import { parseRadioFiles } from './radioStore';
 import { logger } from '../utils/logger';
 
 // ─── Paths ────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ export function getAllRadios(): QuranRadioSource[] {
  * Get all radios including live stations (Makkah, Madinah).
  */
 export function getRadiosWithLiveStations(): QuranRadioSource[] {
-    return getRadiosWithLive(getAllRadios());
+    return getAllRadios();
 }
 
 /**

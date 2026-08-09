@@ -4,10 +4,9 @@ import {
 } from 'discord.js';
 import { getQuranRadioConfig, saveQuranRadioConfig } from './guildService';
 import { getAdvancedConfig, setAdvancedConfig } from './advancedConfigService';
-import { getAllRadios, getAllReciters, getReciterById } from '../quran/quranRegistry';
-import { LIVE_MADINA_URL, LIVE_MAKKAH_URL } from '../utils/constants';
+import { getAllReciters, getReciterById } from '../quran/quranRegistry';
 import {
-    getPlaybackSnapshot, getVoicePlaybackHealth, nextGuildTrack, playRadioSource, playTrackQueue, previousGuildTrack,
+    getPlaybackSnapshot, getVoicePlaybackHealth, nextGuildTrack, playTrackQueue, previousGuildTrack,
     recoverGuildVoiceConnection, resumePlayback, stopGuildPlayback, toggleGuildPause,
     PlaybackSnapshot, VoiceTrack,
 } from './voicePlaybackService';
@@ -16,7 +15,7 @@ import { sendAuditLog } from './auditLogService';
 import { logger } from '../utils/logger';
 import { isAdhanPlaybackActive } from './adhanAudioService';
 
-export type QuranMode = 'Idle' | 'QuranKareem' | 'FavoriteReciters' | 'AudioLibrary' | 'Reciter' | 'Makkah' | 'Madinah' | 'Radio';
+export type QuranMode = 'Idle' | 'QuranKareem' | 'FavoriteReciters' | 'AudioLibrary' | 'Reciter';
 export type PlaybackMode = 'بالترتيب' | 'عشوائي' | 'اختيار يدوي' | 'Playlist' | 'سورة الكهف — الجمعة';
 
 export interface PlaylistTrack extends VoiceTrack {
@@ -40,7 +39,6 @@ export interface QuranRuntimeState {
     twentyFourSeven: boolean;
     isPaused: boolean;
     radioLabel?: string;
-    lastLiveKind?: 'makkah' | 'madinah';
     playbackMode?: PlaybackMode;
     phase: 'main' | 'choose_mode' | 'choose_surah';
     selectedReciterId?: string;
@@ -340,21 +338,7 @@ function reciterTracks(reciterId: string): PlaylistTrack[] {
     }));
 }
 
-function liveSource(kind: 'makkah' | 'madinah'): { label: string; url: string } {
-    const needle = kind === 'makkah' ? 'الحرم المكي' : 'المسجد النبوي';
-    const fromFile = getAllRadios().find(radio => radio.name.includes(needle));
-    return {
-        label: fromFile?.name || (kind === 'makkah' ? 'الحرم المكي مباشر' : 'المسجد النبوي مباشر'),
-        url: fromFile?.streamUrl || (kind === 'makkah' ? LIVE_MAKKAH_URL : LIVE_MADINA_URL),
-    };
-}
-
-async function automaticLiveKind(state: QuranRuntimeState): Promise<'makkah' | 'madinah'> {
-    if (!state.twentyFourSeven) return state.lastLiveKind || 'makkah';
-    const cycleStart = new Date(await getCycleStart(state.guildId)).getTime();
-    const slot = Math.floor((Date.now() - cycleStart) / (6 * 60 * 60 * 1000));
-    return slot % 2 === 0 ? 'makkah' : 'madinah';
-}
+// Live streaming functions removed
 
 export function getAllReciterTracks(): PlaylistTrack[] {
     const reciters = getAllReciters();
@@ -525,8 +509,7 @@ export async function playScheduledKahf(client: Client, guildId: string, reciter
         if (previousSnapshot) {
             await resumePlayback(previousSnapshot);
         } else if (config.twentyFourSeven) {
-            const target = await automaticLiveKind(state);
-            await startLive(client, state, voiceChannel, target, false);
+            await startRandomQuranKareem(client, state, voiceChannel, false);
         } else {
             state.mode = 'Idle';
             state.currentTrack = undefined;
@@ -671,8 +654,7 @@ export async function stopFridayKahfLoop(
     if (session.previousSnapshot) {
         await resumePlayback(session.previousSnapshot);
     } else if (config?.twentyFourSeven && voiceChannel?.isVoiceBased()) {
-        const target = await automaticLiveKind(state);
-        await startLive(client, state, voiceChannel, target, false);
+        await startRandomQuranKareem(client, state, voiceChannel, false);
     } else {
         state.mode = 'Idle';
         state.currentTrack = undefined;
@@ -688,24 +670,7 @@ function memberVoice(interaction: any): VoiceBasedChannel | null {
     return (interaction.member as GuildMember)?.voice?.channel || null;
 }
 
-async function startLive(
-    client: Client,
-    state: QuranRuntimeState,
-    channel: VoiceBasedChannel,
-    kind: 'makkah' | 'madinah',
-    userOverride = Boolean(state.controllerId),
-) {
-    const source = liveSource(kind);
-    state.mode = kind === 'makkah' ? 'Makkah' : 'Madinah';
-    state.radioLabel = source.label;
-    state.lastLiveKind = kind;
-    state.currentTrack = undefined;
-    state.playbackMode = undefined;
-    state.userOverride = userOverride;
-    await clearNowPlayingNotification(client, state);
-    await playRadioSource(channel, source.url, source.label);
-    await renderQuranPanel(client, state.guildId);
-}
+// startLive function removed
 
 async function startSavedPlaylistPrompt(client: Client, state: QuranRuntimeState, userId: string) {
     const playlist = await loadPlaylist(state.guildId, userId);
@@ -1150,7 +1115,7 @@ export async function initializeQuranSystems(client: Client) {
 }
 
 export async function saveQuranSetupV2(client: Client, guildId: string, voiceChannelId: string, enabled24h: boolean) {
-    await saveQuranRadioConfig(guildId, voiceChannelId, voiceChannelId, enabled24h, enabled24h ? 'makkah' : 'none');
+    await saveQuranRadioConfig(guildId, voiceChannelId, voiceChannelId, enabled24h, enabled24h ? 'quran_kareem' : 'none');
     await applyQuranConfiguration(client, guildId);
 }
 

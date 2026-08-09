@@ -4,7 +4,7 @@ import * as path from 'path';
 import moment from 'moment-timezone';
 import { Client, PermissionFlagsBits } from 'discord.js';
 import { getVoiceConnection, VoiceConnectionStatus } from '@discordjs/voice';
-import { LIVE_MADINA_URL, LIVE_MAKKAH_URL } from '../utils/constants';
+// LIVE_MADINA_URL and LIVE_MAKKAH_URL removed
 import { getAllRadios, getAllReciters } from '../quran/quranRegistry';
 import { getQuranRadioConfig } from './guildService';
 import { getManagedAdhanZones } from './adhanZoneService';
@@ -52,10 +52,7 @@ function walk(directory: string): string[] {
 }
 
 export function quickQuranTargets(): LinkTarget[] {
-    const targets: LinkTarget[] = [
-        { id: 'live_makkah', label: 'الحرم المكي', url: LIVE_MAKKAH_URL },
-        { id: 'live_madinah', label: 'المسجد النبوي', url: LIVE_MADINA_URL },
-    ];
+    const targets: LinkTarget[] = [];
     for (const radio of getAllRadios()) targets.push({ id: `radio:${radio.id}`, label: radio.name, url: radio.streamUrl });
     for (const reciter of getAllReciters()) {
         const first = reciter.surahs[0];
