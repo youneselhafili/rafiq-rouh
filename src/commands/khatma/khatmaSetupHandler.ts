@@ -13,6 +13,7 @@ import { KhatmaMode, KhatmaState } from '../../types';
 import { activeKhatmaSetups, buildKhatmaSetupPayload } from './setupKhatma';
 import {
     calculatePagesPerDay, setGuildKhatma, deleteGuildKhatma, QURAN_PAGE_IMAGE_BASE_URL,
+    sendKhatmaPages, wasKhatmaSentToday,
 } from '../../services/khatmaService';
 import { getUserDMConfig, updateUserDMConfig } from '../../services/dmSubscriptionService';
 import { sendAuditLog } from '../../services/auditLogService';
@@ -226,6 +227,8 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
 
         const currentPage = session.currentPage > 604 ? 1 : session.currentPage;
         const now = new Date().toISOString();
+        let nextPage = currentPage;
+        let initialDelivery: 'sent' | 'already_sent' | 'failed' | 'stopped' = session.enabled ? 'failed' : 'stopped';
 
         if (session.scope === 'guild') {
             const state: KhatmaState = {
@@ -237,10 +240,19 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
                 mode: session.mode,
                 ramadanKhatmas: session.mode === 'ramadan' ? session.ramadanKhatmas : undefined,
                 isActive: session.enabled,
+                lastSentAt: session.lastSentAt,
                 createdAt: now,
                 updatedAt: now,
             };
             await setGuildKhatma(session.guildId!, state);
+            if (session.enabled) {
+                if (wasKhatmaSentToday(state.lastSentAt)) {
+                    initialDelivery = 'already_sent';
+                } else {
+                    initialDelivery = await sendKhatmaPages(interaction.client, state) ? 'sent' : 'failed';
+                    nextPage = state.currentPage;
+                }
+            }
             await sendAuditLog(interaction.client, session.guildId!, {
                 level: 'config',
                 system: 'Khatma',
@@ -259,9 +271,30 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
                     pagesPerDay: session.pagesPerDay,
                     mode: session.mode,
                     ramadanKhatmas: session.mode === 'ramadan' ? session.ramadanKhatmas : undefined,
+                    lastSentAt: session.lastSentAt,
                     updatedAt: now,
                 },
             });
+            if (session.enabled) {
+                const state: KhatmaState = {
+                    id: interaction.user.id,
+                    isGuild: false,
+                    currentPage,
+                    pagesPerDay: session.pagesPerDay,
+                    mode: session.mode,
+                    ramadanKhatmas: session.mode === 'ramadan' ? session.ramadanKhatmas : undefined,
+                    isActive: true,
+                    lastSentAt: session.lastSentAt,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+                if (wasKhatmaSentToday(state.lastSentAt)) {
+                    initialDelivery = 'already_sent';
+                } else {
+                    initialDelivery = await sendKhatmaPages(interaction.client, state) ? 'sent' : 'failed';
+                    nextPage = state.currentPage;
+                }
+            }
         }
 
         activeKhatmaSetups.delete(interaction.user.id);
@@ -273,9 +306,13 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
                     `**الحالة:** ${session.enabled ? '✅ مفعّل' : '⏸️ متوقف'}\n` +
                     `**الوضع:** ${session.mode}\n` +
                     `**الصفحات في اليوم:** ${session.pagesPerDay}\n` +
-                    `**التقدم:** ${currentPage} / 604\n` +
+                    `**الصفحة القادمة:** ${Math.min(nextPage, 604)} / 604\n` +
                     (session.scope === 'guild' ? `**القناة:** <#${session.channelId}>\n` : '') +
-                    `**الإرسال اليومي:** الساعة 08:00 بتوقيت مكة`,
+                    (initialDelivery === 'sent' ? '**أول إرسال:** ✅ تم إرسال الدفعة الأولى الآن\n'
+                        : initialDelivery === 'already_sent' ? '**أول إرسال:** ✅ تم الإرسال اليوم؛ لن تتكرر الدفعة\n'
+                            : initialDelivery === 'failed' ? '**أول إرسال:** ⚠️ تعذر الآن؛ سيعيد المحاولة في الموعد اليومي\n'
+                                : '**أول إرسال:** لن يتم حتى تفعيل الختمة\n') +
+                    `**الإرسال التالي:** يومياً الساعة 08:00 بتوقيت مكة`,
             }],
             components: [],
         });

@@ -17,6 +17,25 @@ const KHATMA_DUA = `اللَّهُمَّ ارْحَمْنِي بالقُرْءَ
 اللَّهُمَّ إِنِّي أَسْأَلُكَ خَيْرَ المَسْأَلةِ وَخَيْرَ الدُّعَاءِ وَخَيْرَ النَّجَاحِ وَخَيْرَ العِلْمِ وَخَيْرَ العَمَلِ وَخَيْرَ الثَّوَابِ وَخَيْرَ الحَيَاةِ وَخيْرَ المَمَاتِ وَثَبِّتْنِي وَثَقِّلْ مَوَازِينِي وَحَقِّقْ إِيمَانِي وَارْفَعْ دَرَجَتِي وَتَقَبَّلْ صَلاَتِي وَاغْفِرْ خَطِيئَاتِي وَأَسْأَلُكَ العُلَا مِنَ الجَنَّةِ`;
 
 const activeCronJobs = new Map<string, cron.ScheduledTask>();
+const activeKhatmaDeliveries = new Set<string>();
+
+function meccaDateKey(value: Date | string = new Date()): string {
+    const date = value instanceof Date ? value : new Date(value);
+    const parts = new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Riyadh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(date);
+    const part = (type: string) => parts.find(item => item.type === type)?.value || '';
+    return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+export function wasKhatmaSentToday(lastSentAt?: string): boolean {
+    if (!lastSentAt) return false;
+    const parsed = new Date(lastSentAt);
+    return !Number.isNaN(parsed.valueOf()) && meccaDateKey(parsed) === meccaDateKey();
+}
 
 export async function getGuildKhatma(guildId: string): Promise<KhatmaState | null> {
     return getAdvancedConfig<KhatmaState>(guildId, KHATMA_MODULE);
@@ -42,7 +61,14 @@ export function calculatePagesPerDay(mode: KhatmaMode, ramadanKhatmas?: number):
     }
 }
 
-async function sendKhatmaPages(client: Client, state: KhatmaState): Promise<boolean> {
+export async function sendKhatmaPages(client: Client, state: KhatmaState): Promise<boolean> {
+    const deliveryKey = `${state.isGuild ? 'guild' : 'dm'}:${state.id}`;
+    if (activeKhatmaDeliveries.has(deliveryKey)) {
+        logger.warn(`Skipped duplicate concurrent Khatma delivery for ${deliveryKey}.`);
+        return false;
+    }
+    activeKhatmaDeliveries.add(deliveryKey);
+
     if (state.currentPage > 604 || state.currentPage < 1) state.currentPage = 1;
     const pagesPerDay = Math.max(1, state.pagesPerDay || 1);
     const pagesToSend = [];
@@ -78,6 +104,8 @@ async function sendKhatmaPages(client: Client, state: KhatmaState): Promise<bool
         }
 
         state.currentPage = endPage + 1;
+        state.lastSentAt = new Date().toISOString();
+        state.updatedAt = state.lastSentAt;
 
         if (finished) {
             const duaEmbed = new EmbedBuilder()
@@ -97,6 +125,8 @@ async function sendKhatmaPages(client: Client, state: KhatmaState): Promise<bool
             if (config.khatma) {
                 config.khatma.currentPage = state.currentPage;
                 config.khatma.enabled = state.isActive;
+                config.khatma.lastSentAt = state.lastSentAt;
+                config.khatma.updatedAt = state.updatedAt;
                 await updateUserDMConfig(state.id, config);
             }
         }
@@ -106,6 +136,8 @@ async function sendKhatmaPages(client: Client, state: KhatmaState): Promise<bool
     } catch (error) {
         logger.error(`Failed to send Khatma pages for ${state.id}: ${error}`);
         return false;
+    } finally {
+        activeKhatmaDeliveries.delete(deliveryKey);
     }
 }
 
@@ -115,7 +147,7 @@ export async function processAllKhatmas(client: Client) {
     for (const [guildId, guild] of client.guilds.cache) {
         try {
             const state = await getGuildKhatma(guildId);
-            if (state && state.isActive) {
+            if (state && state.isActive && !wasKhatmaSentToday(state.lastSentAt)) {
                 await sendKhatmaPages(client, state);
             }
         } catch (error) {
@@ -135,10 +167,12 @@ export async function processAllKhatmas(client: Client) {
             pagesPerDay: khatma.pagesPerDay || calculatePagesPerDay(khatma.mode, khatma.ramadanKhatmas),
             mode: khatma.mode,
             ramadanKhatmas: khatma.ramadanKhatmas,
+            lastSentAt: khatma.lastSentAt,
             isActive: true,
             createdAt: khatma.updatedAt || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
+        if (wasKhatmaSentToday(state.lastSentAt)) continue;
         try {
             await sendKhatmaPages(client, state);
         } catch (error) {

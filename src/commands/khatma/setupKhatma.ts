@@ -34,6 +34,7 @@ export interface KhatmaSetupSession {
     pagesPerDay: number;
     ramadanKhatmas: number;
     currentPage: number;
+    lastSentAt?: string;
     updatedAt?: string;
     deleteExpiresAt?: number;
 }
@@ -59,6 +60,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
             pagesPerDay: khatma?.pagesPerDay || calculatePagesPerDay(khatma?.mode ?? 'month'),
             ramadanKhatmas: khatma?.ramadanKhatmas ?? 1,
             currentPage: khatma?.currentPage ?? 1,
+            lastSentAt: khatma?.lastSentAt,
             updatedAt: khatma?.updatedAt,
         };
         activeKhatmaSetups.set(interaction.user.id, session);
@@ -78,6 +80,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         pagesPerDay: state?.pagesPerDay || calculatePagesPerDay(state?.mode ?? 'month'),
         ramadanKhatmas: state?.ramadanKhatmas ?? 1,
         currentPage: state?.currentPage ?? 1,
+        lastSentAt: state?.lastSentAt,
         updatedAt: state?.updatedAt,
     };
     activeKhatmaSetups.set(interaction.user.id, session);
@@ -99,7 +102,7 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
             { name: 'التقدم', value: `${Math.min(session.currentPage, 604)} / 604`, inline: true },
             ...(session.scope === 'guild' ? [{ name: 'القناة', value: session.channelId ? `<#${session.channelId}>` : '❌ لم يتم اختيار قناة', inline: false }] : []),
         )
-        .setFooter({ text: 'تقبل الله منا ومنكم صالح الأعمال • تُرسل الختمة يوميا الساعة 08:00 بتوقيت مكة' });
+        .setFooter({ text: 'تُرسل أول دفعة بعد الحفظ، ثم يومياً الساعة 08:00 بتوقيت مكة' });
 
     const modeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder()

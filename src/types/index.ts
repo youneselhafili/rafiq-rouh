@@ -87,6 +87,7 @@ export interface KhatmaState {
     mode: KhatmaMode;
     ramadanKhatmas?: number; // Only for ramadan mode
     isActive: boolean;
+    lastSentAt?: string;
     createdAt: string;
     updatedAt: string;
 }

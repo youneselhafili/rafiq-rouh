@@ -63,6 +63,7 @@ export interface UserDMConfig extends UserDMSubscriptions {
         pagesPerDay: number;
         mode: import('../types').KhatmaMode;
         ramadanKhatmas?: number;
+        lastSentAt?: string;
         updatedAt?: string;
     };
     runtime?: {
