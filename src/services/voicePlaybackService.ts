@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import { ChildProcess, spawn } from 'child_process';
 import ffmpegPath from 'ffmpeg-static';
 import {
@@ -252,8 +252,11 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
 }
 
 async function resourceFromUrl(url: string) {
-    if (/\.m3u8(?:$|\?)/i.test(url)) {
-        if (!ffmpegPath) throw new Error('FFmpeg executable is unavailable for HLS playback.');
+    const isHLS = /\.m3u8(?:$|\?)/i.test(url);
+    const isLiveStream = /radiojar\.com|icecast|shoutcast|qurango\.net\/radio|backup\.qurango|m3u8/i.test(url);
+
+    if (isHLS || isLiveStream) {
+        if (!ffmpegPath) throw new Error('FFmpeg executable is unavailable for HLS/live playback.');
         const transcoder = spawn(ffmpegPath, [
             '-hide_banner', '-loglevel', 'warning',
             '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
@@ -268,10 +271,10 @@ async function resourceFromUrl(url: string) {
         let stderr = '';
         transcoder.stderr?.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-2000); });
         transcoder.once('error', error => {
-            logger.warn(`[Voice] HLS transcoder process error: ${error instanceof Error ? error.message : String(error)}`);
+            logger.warn(`[Voice] Live transcoder process error: ${error instanceof Error ? error.message : String(error)}`);
         });
         transcoder.once('exit', code => {
-            if (code && !transcoder.killed) logger.warn(`[Voice] HLS transcoder exited with code ${code}: ${stderr.trim()}`);
+            if (code && !transcoder.killed) logger.warn(`[Voice] Live transcoder exited with code ${code}: ${stderr.trim()}`);
         });
         return {
             resource: createAudioResource(transcoder.stdout, { inputType: StreamType.OggOpus }),
