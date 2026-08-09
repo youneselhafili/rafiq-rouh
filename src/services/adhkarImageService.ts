@@ -10,10 +10,21 @@ const MAX_TEXT_WIDTH = 980;
 const TEXT_TOP = 175;
 const TEXT_BOTTOM = 520;
 
-const cairo = path.resolve(process.cwd(), 'assets/fonts/Cairo-Bold.ttf');
-const tajawal = path.resolve(process.cwd(), 'assets/fonts/Tajawal-Regular.ttf');
+function resolveFontPath(filename: string): string {
+    const candidates = [
+        path.resolve(process.cwd(), 'assets/fonts', filename),
+        path.resolve(__dirname, '../../../assets/fonts', filename), // compiled dist/src/services
+        path.resolve(__dirname, '../../assets/fonts', filename), // ts-node src/services
+    ];
+    return candidates.find(candidate => fs.existsSync(candidate)) || candidates[0];
+}
+
+const cairo = resolveFontPath('Cairo-Bold.ttf');
+const tajawal = resolveFontPath('Tajawal-Regular.ttf');
+const tajawalBold = resolveFontPath('Tajawal-Bold.ttf');
 if (fs.existsSync(cairo)) GlobalFonts.registerFromPath(cairo, 'Cairo');
 if (fs.existsSync(tajawal)) GlobalFonts.registerFromPath(tajawal, 'Tajawal');
+if (fs.existsSync(tajawalBold)) GlobalFonts.registerFromPath(tajawalBold, 'Tajawal-Bold');
 
 function wrap(ctx: any, text: string, maxWidth: number): string[] {
     const paragraphs = text.split(/\n+/).filter(Boolean);
@@ -88,7 +99,7 @@ function renderPage(text: string, title: string, page: number, total: number, so
     ctx.textBaseline = 'middle';
     ctx.direction = 'rtl';
     ctx.fillStyle = '#67d18a';
-    ctx.font = 'bold 42px Cairo';
+    ctx.font = '42px Tajawal-Bold, Cairo';
     ctx.fillText(title, WIDTH / 2, 105);
     let fontSize = MAX_FONT;
     while (fontSize > MIN_FONT && !fits(ctx, text, fontSize)) fontSize -= 2;
@@ -130,7 +141,7 @@ export function generateNamesGridImage(names: string[], page: number, totalPages
     ctx.textBaseline = 'middle';
     ctx.direction = 'rtl';
     ctx.fillStyle = '#67d18a';
-    ctx.font = 'bold 42px Cairo';
+    ctx.font = '42px Tajawal-Bold, Cairo';
     ctx.fillText('أسماء الله الحسنى', WIDTH / 2, 92);
     const cellWidth = 300;
     const cellHeight = 115;
@@ -147,7 +158,7 @@ export function generateNamesGridImage(names: string[], page: number, totalPages
         ctx.fillRect(x, y, cellWidth - 20, cellHeight - 18);
         ctx.strokeRect(x, y, cellWidth - 20, cellHeight - 18);
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 38px Cairo';
+        ctx.font = '38px Tajawal-Bold, Cairo';
         ctx.fillText(name, x + (cellWidth - 20) / 2, y + (cellHeight - 18) / 2, cellWidth - 40);
     });
     ctx.fillStyle = '#b9d8c4';

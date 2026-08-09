@@ -4,10 +4,19 @@ import * as fs from 'fs';
 import { PRAYER_NAMES } from '../utils/constants';
 
 // Register Fonts
-const cairoFontPath = path.resolve(process.cwd(), 'assets/fonts/Cairo-Bold.ttf');
-const tajawalRegPath = path.resolve(process.cwd(), 'assets/fonts/Tajawal-Regular.ttf');
-const tajawalBoldPath = path.resolve(process.cwd(), 'assets/fonts/Tajawal-Bold.ttf');
-const notoEmojiPath = path.resolve(process.cwd(), 'assets/fonts/NotoEmoji-Regular.ttf');
+function resolveFontPath(filename: string): string {
+    const candidates = [
+        path.resolve(process.cwd(), 'assets/fonts', filename),
+        path.resolve(__dirname, '../../../assets/fonts', filename), // compiled dist/src/services
+        path.resolve(__dirname, '../../assets/fonts', filename), // ts-node src/services
+    ];
+    return candidates.find(candidate => fs.existsSync(candidate)) || candidates[0];
+}
+
+const cairoFontPath = resolveFontPath('Cairo-Bold.ttf');
+const tajawalRegPath = resolveFontPath('Tajawal-Regular.ttf');
+const tajawalBoldPath = resolveFontPath('Tajawal-Bold.ttf');
+const notoEmojiPath = resolveFontPath('NotoEmoji-Regular.ttf');
 
 if (fs.existsSync(cairoFontPath)) GlobalFonts.registerFromPath(cairoFontPath, 'Cairo');
 if (fs.existsSync(tajawalRegPath)) GlobalFonts.registerFromPath(tajawalRegPath, 'Tajawal');
@@ -142,7 +151,7 @@ export async function generateAdhanImage(
 
     // Prayer name
     ctx.fillStyle = '#D4AF37';
-    ctx.font = '80px Cairo, NotoEmoji';
+    ctx.font = '80px Tajawal-Bold, Cairo, NotoEmoji';
     ctx.fillText(arabicPrayer, CANVAS_WIDTH / 2, 210);
 
     // Prayer time — white, large
@@ -165,7 +174,7 @@ export async function generateAdhanImage(
 
     // Verse
     ctx.fillStyle = '#e0e8f0';
-    ctx.font = '33px Cairo, NotoEmoji';
+    ctx.font = '33px Tajawal-Bold, Cairo, NotoEmoji';
     const verseLines = wrapText(ctx, `﴿${verseText}﴾`, CANVAS_WIDTH * 0.85);
     let vY = 430;
     for (const line of verseLines) {
@@ -237,7 +246,7 @@ export async function generateAdhanWarningImage(
 
     // Message
     ctx.fillStyle = '#ffffff';
-    ctx.font = '55px Cairo, NotoEmoji';
+    ctx.font = '55px Tajawal-Bold, Cairo, NotoEmoji';
     ctx.fillText(`تبقى 5 دقائق على رفع أذان ${arabicPrayerName}`, CANVAS_WIDTH / 2, 170);
 
     // Location & Time
@@ -278,7 +287,7 @@ export async function generatePrayerCard(
     ctx.textBaseline = 'middle';
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '60px Cairo, NotoEmoji';
+    ctx.font = '60px Tajawal-Bold, Cairo, NotoEmoji';
     ctx.fillText('مواقيت الصلاة', CANVAS_WIDTH / 2, 100);
 
     ctx.fillStyle = '#d4d4d8';
@@ -344,7 +353,7 @@ export async function generateJumuahImage(quote: string): Promise<any> {
     ctx.textBaseline = 'middle';
 
     ctx.fillStyle = '#D4AF37';
-    ctx.font = '70px Cairo, NotoEmoji';
+    ctx.font = '70px Tajawal-Bold, Cairo, NotoEmoji';
     ctx.fillText('جمعة مباركة', CANVAS_WIDTH / 2, 180);
 
     ctx.fillStyle = '#ffffff';
@@ -391,7 +400,7 @@ export async function generateJumuahKahfImage(quote: string, reciterName: string
     ctx.fillText('تلاوة يوم الجمعة', CANVAS_WIDTH / 2, 105);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '84px Cairo, NotoEmoji';
+    ctx.font = '84px Tajawal-Bold, Cairo, NotoEmoji';
     ctx.fillText('سورة الكهف', CANVAS_WIDTH / 2, 205);
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
@@ -439,7 +448,7 @@ export async function generateQuranLiveImage(reciterName: string, isLive: boolea
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#D4AF37';
-    ctx.font = '60px Cairo, NotoEmoji';
+    ctx.font = '60px Tajawal-Bold, Cairo, NotoEmoji';
     ctx.fillText('القرآن الكريم', CANVAS_WIDTH / 2, 200);
 
     ctx.fillStyle = '#ffffff';
@@ -484,7 +493,7 @@ export async function generateAdhkarImage(dhikrText: string, isTasbih: boolean =
     ctx.textBaseline = 'middle';
 
     ctx.fillStyle = '#4CAF50';
-    ctx.font = '45px Cairo, NotoEmoji';
+    ctx.font = '45px Tajawal-Bold, Cairo, NotoEmoji';
     ctx.fillText(title, CANVAS_WIDTH / 2, 140);
 
     ctx.fillStyle = '#ffffff';
@@ -526,7 +535,7 @@ export async function generateSalawatImage(text: string = 'اللهم صل وس�
     ctx.textBaseline = 'middle';
 
     ctx.fillStyle = '#4CAF50';
-    ctx.font = '50px Cairo, NotoEmoji';
+    ctx.font = '50px Tajawal-Bold, Cairo, NotoEmoji';
     ctx.fillText('صلوا على النبي ﷺ', CANVAS_WIDTH / 2, 180);
 
     ctx.fillStyle = '#ffffff';
