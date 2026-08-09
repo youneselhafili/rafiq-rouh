@@ -10,8 +10,8 @@ const MAX_TEXT_WIDTH = 980;
 const TEXT_TOP = 175;
 const TEXT_BOTTOM = 520;
 
-const cairo = path.resolve('./TEMP/fonts/Cairo-Bold.ttf');
-const tajawal = path.resolve('./TEMP/fonts/Tajawal-Regular.ttf');
+const cairo = path.resolve(process.cwd(), 'assets/fonts/Cairo-Bold.ttf');
+const tajawal = path.resolve(process.cwd(), 'assets/fonts/Tajawal-Regular.ttf');
 if (fs.existsSync(cairo)) GlobalFonts.registerFromPath(cairo, 'Cairo');
 if (fs.existsSync(tajawal)) GlobalFonts.registerFromPath(tajawal, 'Tajawal');
 

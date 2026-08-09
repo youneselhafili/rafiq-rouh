@@ -4,9 +4,9 @@ import * as fs from 'fs';
 import { PRAYER_NAMES } from '../utils/constants';
 
 // Register Fonts
-const cairoFontPath = path.resolve('./TEMP/fonts/Cairo-Bold.ttf');
-const tajawalRegPath = path.resolve('./TEMP/fonts/Tajawal-Regular.ttf');
-const tajawalBoldPath = path.resolve('./TEMP/fonts/Tajawal-Bold.ttf');
+const cairoFontPath = path.resolve(process.cwd(), 'assets/fonts/Cairo-Bold.ttf');
+const tajawalRegPath = path.resolve(process.cwd(), 'assets/fonts/Tajawal-Regular.ttf');
+const tajawalBoldPath = path.resolve(process.cwd(), 'assets/fonts/Tajawal-Bold.ttf');
 
 if (fs.existsSync(cairoFontPath)) GlobalFonts.registerFromPath(cairoFontPath, 'Cairo');
 if (fs.existsSync(tajawalRegPath)) GlobalFonts.registerFromPath(tajawalRegPath, 'Tajawal');
