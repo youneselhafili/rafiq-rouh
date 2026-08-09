@@ -57,6 +57,8 @@ export interface QuranRuntimeState {
 
 const states = new Map<string, QuranRuntimeState>();
 const cycleTimers = new Map<string, ReturnType<typeof setInterval>>();
+const quran24StallSince = new Map<string, number>();
+const QURAN_STALL_RESTART_MS = 120_000;
 
 interface FridayKahfPreviousState {
     mode: QuranMode;
@@ -1048,30 +1050,43 @@ export async function enforceQuran24Cycle(client: Client, guildId: string, force
             await renderQuranPanel(client, guildId, state.controllerId ? `<@${state.controllerId}> تم تفعيل لوحة التحكم بعد إصلاح الصلاحيات.` : undefined);
         }
     }
-    if (humans.size > 0 && state.userOverride && !force) return;
+    if (humans.size > 0 && state.userOverride && !force) {
+        quran24StallSince.delete(guildId);
+        return;
+    }
     if (!force && state.mode === 'QuranKareem') {
         // ─── Watchdog: detect zombie/silent playback ───────────────────
-        // If the bot appears connected but audio has frozen (stream stalled
-        // after 2+ hours), fall through to restart instead of returning.
+        // Only restart when playback has been silent for a sustained period.
+        // A single tick must never cut a surah that is still playing or
+        // during the short transition between surahs.
         if (!state.isPaused) {
             const health = getVoicePlaybackHealth(guildId);
             const isHealthy = health.active
                 && (health.connectionStatus as string) === 'ready'
                 && (health.playerStatus as string) === 'playing';
-            if (!isHealthy) {
-                logger.warn(
-                    `[QuranV2] ${guildId}: Zombie/silent playback detected ` +
-                    `(conn=${health.connectionStatus ?? 'none'}, player=${health.playerStatus ?? 'none'}). ` +
-                    `Restarting stream...`,
-                );
-                // Fall through → startRandomQuranKareem will restart
-            } else {
+            if (isHealthy) {
+                quran24StallSince.delete(guildId);
                 return; // Audio is healthy, nothing to do
             }
+            const stalledSince = quran24StallSince.get(guildId) ?? Date.now();
+            quran24StallSince.set(guildId, stalledSince);
+            if (Date.now() - stalledSince < QURAN_STALL_RESTART_MS) {
+                return; // Still within a legitimate transition window
+            }
+            logger.warn(
+                `[QuranV2] ${guildId}: Zombie/silent playback detected for > ${QURAN_STALL_RESTART_MS / 1000}s ` +
+                `(conn=${health.connectionStatus ?? 'none'}, player=${health.playerStatus ?? 'none'}). ` +
+                `Restarting stream...`,
+            );
+            // Fall through → startRandomQuranKareem will restart
         } else {
+            quran24StallSince.delete(guildId);
             return; // Bot is intentionally paused
         }
+    } else {
+        quran24StallSince.delete(guildId);
     }
+    quran24StallSince.delete(guildId);
     state.controllerId = humans.first()?.id;
     state.userOverride = false;
     await startRandomQuranKareem(client, state, channel, false);

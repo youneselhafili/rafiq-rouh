@@ -5,6 +5,7 @@ import { getAllReciters } from '../quran/quranRegistry';
 import type { QuranRuntimeState } from './quranRadioServiceV2';
 
 export function buildQuranPanel(state: QuranRuntimeState) {
+    const allReciters = getAllReciters();
     const current = state.currentTrack
         ? `📖 **${state.currentTrack.title}**\n🎙️ ${state.currentTrack.subtitle || 'غير محدد'}`
         : state.mode === 'QuranKareem' ? '📖 القرآن الكريم (بث عشوائي 24/24)'
@@ -17,14 +18,15 @@ export function buildQuranPanel(state: QuranRuntimeState) {
         .setDescription(
             `${current}\n\n` +
             `👤 **المتحكم:** ${state.controllerId ? `<@${state.controllerId}>` : 'لا يوجد'}\n` +
+            `🎙️ **القراء المتوفرون:** ${allReciters.length}\n` +
             `🎵 **طريقة التشغيل:** ${state.playbackMode || 'عادي'}\n` +
             `📋 **المتبقي:** ${Math.max(0, state.queue.length - state.currentIndex - 1)}\n` +
             `🕐 **24/24:** ${state.twentyFourSeven ? '✅' : '❌'}\n\n` +
             '✨ **معلومة:** تشغيل القرآن الكريم يدور عشوائياً بين جميع القراء والتلاوات على مدار 24 ساعة.',
         )
+        .setFooter({ text: 'Created by YOUNES ELHAFILI' })
         .setTimestamp();
 
-    const allReciters = getAllReciters();
     const selectedReciter = allReciters.find(r => r.id === state.selectedReciterId);
     
     const isFavoriteActive = state.mode === 'FavoriteReciters' || 

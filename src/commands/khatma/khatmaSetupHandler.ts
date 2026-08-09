@@ -5,6 +5,7 @@ import {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
+    ChannelType,
 } from 'discord.js';
 import { KhatmaMode, KhatmaState } from '../../types';
 import { activeKhatmaSetups, buildKhatmaSetupPayload } from './setupKhatma';
@@ -27,6 +28,22 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
     }
 
     if (interaction.isModalSubmit?.()) {
+        if (interaction.customId === 'khatma_setup_channel_id_modal') {
+            const channelId = interaction.fields.getTextInputValue('khatma_channel_id').trim().replace(/[<#>]/g, '');
+            if (!/^\d{17,22}$/.test(channelId)) {
+                await interaction.reply({ content: '❌ معرّف القناة غير صالح.', flags: 64 });
+                return;
+            }
+            const channel = await interaction.guild?.channels.fetch(channelId).catch(() => null);
+            if (!channel || channel.guildId !== interaction.guildId ||
+                (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) {
+                await interaction.reply({ content: '❌ القناة غير موجودة أو ليست قناة نصية/إعلانات.', flags: 64 });
+                return;
+            }
+            session.channelId = channel.id;
+            await interaction.update(buildKhatmaSetupPayload(session));
+            return;
+        }
         if (interaction.customId === 'khatma_setup_custom_pages_modal') {
             const raw = interaction.fields.getTextInputValue('khatma_custom_pages').trim();
             const pages = Number(raw);
@@ -72,6 +89,24 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
 
     if (!interaction.isButton?.()) return;
     const id = interaction.customId;
+
+    if (id === 'khatma_setup_channel_id') {
+        const input = new TextInputBuilder()
+            .setCustomId('khatma_channel_id')
+            .setLabel('معرّف قناة الختمة')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMinLength(17)
+            .setMaxLength(22)
+            .setPlaceholder('مثال: 123456789012345678');
+        if (session.channelId) input.setValue(session.channelId);
+        const modal = new ModalBuilder()
+            .setCustomId('khatma_setup_channel_id_modal')
+            .setTitle('اختيار قناة الختمة بالـID')
+            .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+        await interaction.showModal(modal);
+        return;
+    }
 
     if (id === 'khatma_setup_custom_pages') {
         const input = new TextInputBuilder()

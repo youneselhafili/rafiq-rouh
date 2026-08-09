@@ -130,6 +130,8 @@ npm start
 
 | Command | Description |
 |---------|-------------|
+| `/setup channel` | Open any server channel/configuration panel from one command |
+| `/setup quran_preview [page]` | Privately preview a Quran page image without changing progress |
 | `/setup_adhan` | Configure adhan zones, audio, and notifications |
 | `/adhan_zones` | View/manage your prayer zones |
 | `/setup_quran` | Configure the Quran radio voice channel and 24/7 mode |

@@ -5,6 +5,8 @@ import {
     ChannelType,
     EmbedBuilder,
     ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
     ChannelSelectMenuBuilder,
 } from 'discord.js';
 import { UI_COLORS } from '../../utils/uiRenderer';
@@ -55,5 +57,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
             .addChannelTypes(ChannelType.GuildVoice),
     );
 
-    await interaction.editReply({ embeds: [embed], components: [channelSelectRow] });
+    const controls = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId('quran_setup_toggle_24h')
+            .setLabel(session.twentyFourSeven ? '24/24: مفعل' : '24/24: متوقف')
+            .setEmoji('🕐').setStyle(session.twentyFourSeven ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('quran_setup_channel_id').setLabel('إدخال معرّف القناة').setEmoji('🔢').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('quran_setup_save').setLabel('حفظ').setEmoji('💾').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('quran_setup_cancel').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
+    );
+
+    await interaction.editReply({ embeds: [embed], components: [channelSelectRow, controls] });
 }

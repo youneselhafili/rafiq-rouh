@@ -134,6 +134,16 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
             .setStyle(ButtonStyle.Secondary),
     );
 
+    if (session.scope === 'guild') {
+        firstRow.addComponents(
+            new ButtonBuilder()
+                .setCustomId('khatma_setup_channel_id')
+                .setLabel('إدخال معرّف القناة')
+                .setEmoji('🔢')
+                .setStyle(ButtonStyle.Secondary),
+        );
+    }
+
     const components: any[] = [modeRow, firstRow];
 
     if (session.scope === 'guild') {

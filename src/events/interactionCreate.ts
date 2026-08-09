@@ -64,12 +64,17 @@ export async function execute(interaction: Interaction) {
             if (interaction.guildId) void sendAuditLog(client, interaction.guildId, { level: 'info', system: 'Interaction', action: 'Modal ' + interaction.customId, actorId: interaction.user.id }).catch(() => {});
             if (interaction.customId.startsWith('adhan_setup_')) {
                 await handleAdhanSetupInteraction(interaction as any);
+            } else if (interaction.customId.startsWith('adhkar_setup_')) {
+                await handleAdhkarSetupInteraction(interaction as any);
             } else if (interaction.customId.startsWith('salawat_setup_')) {
                 await handleSalawatSetupInteraction(interaction as any);
             } else if (interaction.customId.startsWith('jumuah_setup_')) {
                 await handleJumuahSetupInteraction(interaction as any);
             } else if (interaction.customId.startsWith('khatma_setup_')) {
                 await handleKhatmaSetupInteraction(interaction as any);
+            } else if (interaction.customId.startsWith('quran_setup_')) {
+                const { handleQuranSetupInteraction } = await import('../commands/quran/quranSetupHandler');
+                await handleQuranSetupInteraction(interaction as any);
             } else if (interaction.customId.startsWith('logs_setup_')) {
                 await handleLogsSetupInteraction(interaction as any);
             } else if (interaction.customId.startsWith('roles_setup_modal_')) {
@@ -236,7 +241,6 @@ async function handleButton(interaction: ButtonInteraction) {
         }
     }
 }
-
 
 
 
