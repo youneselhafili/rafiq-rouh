@@ -69,7 +69,7 @@ export async function loadCommands(client: ExtendedClient): Promise<void> {
 /**
  * Registers all slash commands with Discord API
  */
-export async function deployCommands(client: ExtendedClient): Promise<void> {
+export async function deployCommands(client: ExtendedClient): Promise<boolean> {
     const commands = client.commands.map((cmd) => cmd.data.toJSON());
 
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);
@@ -77,22 +77,25 @@ export async function deployCommands(client: ExtendedClient): Promise<void> {
     try {
         logger.info(`🔄 Refreshing ${commands.length} slash commands...`);
 
+        // Keep global commands synchronized so commands removed from the code
+        // are also removed from Discord in every server.
+        await rest.put(
+            Routes.applicationCommands(process.env.CLIENT_ID!),
+            { body: commands }
+        );
+        logger.success(`✅ Registered ${commands.length} global commands.`);
+
         if (process.env.GUILD_ID) {
-            // Guild-specific (faster for development)
+            // Also synchronize the development guild for immediate updates.
             await rest.put(
                 Routes.applicationGuildCommands(process.env.CLIENT_ID!, process.env.GUILD_ID!),
                 { body: commands }
             );
             logger.success(`✅ Registered ${commands.length} guild commands.`);
-        } else {
-            // Global commands
-            await rest.put(
-                Routes.applicationCommands(process.env.CLIENT_ID!),
-                { body: commands }
-            );
-            logger.success(`✅ Registered ${commands.length} global commands.`);
         }
+        return true;
     } catch (error) {
         logger.error('Failed to deploy commands:', error);
+        return false;
     }
 }

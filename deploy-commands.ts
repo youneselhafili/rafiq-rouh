@@ -17,7 +17,8 @@ async function deploy() {
         logger.info('Started deploying slash commands...');
         
         await loadCommands(client);
-        await deployCommands(client);
+        const deployed = await deployCommands(client);
+        if (!deployed) throw new Error('Discord command synchronization failed. Check the error above.');
 
         logger.success('✅ Successfully deployed all slash commands!');
         process.exit(0);

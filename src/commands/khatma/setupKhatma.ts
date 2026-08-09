@@ -125,8 +125,7 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
             .setCustomId('khatma_setup_ramadan')
             .setLabel('عدد الختمات الرمضانية')
             .setEmoji('🌙')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(session.mode !== 'ramadan'),
+            .setStyle(session.mode === 'ramadan' ? ButtonStyle.Primary : ButtonStyle.Secondary),
         new ButtonBuilder()
             .setCustomId('khatma_setup_toggle')
             .setLabel(session.enabled ? 'توقيف' : 'تفعيل')
