@@ -1,0 +1,42 @@
+{
+  "name": "rafiq-el-rouh",
+  "version": "1.0.0",
+  "description": "رفيق الروح - بوت إسلامي للقرآن الكريم والأذان والأذكار",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/src/index.js",
+    "dev": "ts-node src/index.ts",
+    "deploy-commands": "ts-node deploy-commands.ts",
+    "migrate": "ts-node migrate-to-firestore.ts"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "@napi-rs/canvas": "^1.0.0",
+    "axios": "^1.16.1",
+    "discord.js": "^14.26.4",
+    "dotenv": "^16.6.1",
+    "ffmpeg-static": "^5.2.0",
+    "firebase-admin": "^14.0.0",
+    "libsodium-wrappers": "^0.7.15",
+    "moment-timezone": "^0.6.2",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/axios": "^0.9.36",
+    "@types/cron": "^2.0.1",
+    "@types/moment-timezone": "^0.5.13",
+    "@types/node": "^22.19.19",
+    "@types/node-cron": "^3.0.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [
+    "discord",
+    "quran",
+    "adhan",
+    "adhkar",
+    "islamic"
+  ],
+  "license": "ISC"
+}

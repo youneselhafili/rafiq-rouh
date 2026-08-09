@@ -1,0 +1,32 @@
+node_modules/
+dist/
+/logs/
+
+.env
+.env.*
+!.env.example
+
+service-account.json
+*-firebase-adminsdk-*.json
+
+*.log
+*.zip
+*.rar
+
+discloud.config
+
+# Temporary files and backups
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+*.orig
+Thumbs.db
+.DS_Store
+
+# Private keys / credentials
+*.pem
+*.key
+*.pfx
+*.p12

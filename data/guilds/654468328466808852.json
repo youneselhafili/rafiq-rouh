@@ -1,0 +1,51 @@
+{
+  "guildId": "654468328466808852",
+  "createdAt": "2026-07-24T15:02:09.151Z",
+  "adhanZonesV2": {
+    "enabled": true,
+    "zones": [
+      {
+        "country": "Morocco",
+        "city": "Rabat",
+        "timezone": "Africa/Casablanca",
+        "channelId": "1529988379566145556",
+        "enabled": true,
+        "createdAt": "2026-07-24T15:02:09.151Z",
+        "updatedBy": "1050902797421383712"
+      }
+    ]
+  },
+  "updatedAt": "2026-07-24T15:03:07.221Z",
+  "adhan": [
+    {
+      "country": "Morocco",
+      "city": "Rabat",
+      "timezone": "Africa/Casablanca",
+      "channelId": "1529988379566145556"
+    }
+  ],
+  "salawatV2": {
+    "enabled": true,
+    "channelId": "1530009808877649968",
+    "scheduleMode": "interval",
+    "intervalHours": 4,
+    "fixedTimes": [],
+    "timezone": "Africa/Casablanca",
+    "anchorAt": "2026-07-24T15:02:55.139Z",
+    "nextRunAt": "2026-07-24T19:02:55.139Z",
+    "updatedBy": "1050902797421383712",
+    "deleted": false
+  },
+  "salawat": [
+    {
+      "channelId": "1530009808877649968",
+      "intervalHours": 4
+    }
+  ],
+  "quranRadio": {
+    "voiceChannelId": "1529998678436348105",
+    "textChannelId": "1529998678436348105",
+    "twentyFourSeven": false,
+    "defaultSource": "none"
+  }
+}
