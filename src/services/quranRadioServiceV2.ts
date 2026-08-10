@@ -361,6 +361,48 @@ export function getAllReciterTracks(): PlaylistTrack[] {
     return tracks;
 }
 
+function trackKey(track: PlaylistTrack): string {
+    return `${track.reciterId || track.subtitle}:${track.surahIndex ?? track.title}:${track.url}`;
+}
+
+function shuffledQuranCycle(
+    tracks: PlaylistTrack[],
+    previousCycle: PlaylistTrack[],
+    previousTrack?: PlaylistTrack,
+): PlaylistTrack[] {
+    const previousKeys = previousCycle.map(trackKey);
+    const previousTrackKey = previousTrack ? trackKey(previousTrack) : undefined;
+
+    // With a normal Quran catalog the first attempt will almost always satisfy
+    // both rules. Retrying makes the guarantees explicit without biasing every
+    // cycle toward the same deterministic rotation.
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+        const cycle = shuffle(tracks);
+        const repeatsPreviousOrder = cycle.length === previousKeys.length
+            && cycle.every((track, index) => trackKey(track) === previousKeys[index]);
+        const repeatsBoundaryTrack = cycle.length > 1
+            && previousTrackKey !== undefined
+            && trackKey(cycle[0]) === previousTrackKey;
+        if (!repeatsPreviousOrder && !repeatsBoundaryTrack) return cycle;
+    }
+
+    // Extremely small catalogs can repeatedly hit one of the constraints by
+    // chance. Rotate once so playback still starts with a different track.
+    const fallback = shuffle(tracks);
+    if (fallback.length > 1 && previousTrackKey && trackKey(fallback[0]) === previousTrackKey) {
+        const replacement = fallback.findIndex(track => trackKey(track) !== previousTrackKey);
+        if (replacement > 0) [fallback[0], fallback[replacement]] = [fallback[replacement], fallback[0]];
+    }
+    const stillRepeatsPreviousOrder = fallback.length === previousKeys.length
+        && fallback.every((track, index) => trackKey(track) === previousKeys[index]);
+    if (stillRepeatsPreviousOrder && fallback.length > 1) {
+        const left = fallback.length > 2 ? 1 : 0;
+        const right = left + 1;
+        [fallback[left], fallback[right]] = [fallback[right], fallback[left]];
+    }
+    return fallback;
+}
+
 export async function startRandomQuranKareem(
     client: Client,
     state: QuranRuntimeState,
@@ -370,23 +412,27 @@ export async function startRandomQuranKareem(
     const allTracks = getAllReciterTracks();
     if (allTracks.length === 0) return;
 
-    const randomTrack = allTracks[Math.floor(Math.random() * allTracks.length)];
+    const previousCycle = state.mode === 'QuranKareem' ? [...state.queue] : [];
+    const previousTrack = state.currentTrack;
+    const cycleTracks = shuffledQuranCycle(allTracks, previousCycle, previousTrack);
 
     state.mode = 'QuranKareem';
     state.radioLabel = 'القرآن الكريم';
     state.playbackMode = 'عشوائي';
     state.phase = 'main';
+    state.queue = cycleTracks;
+    state.currentIndex = 0;
     if (isManual) state.userOverride = true;
 
     await playTrackQueue(
         channel,
-        [randomTrack],
+        cycleTracks,
         0,
         async (rawTrack, index, total) => {
             const track = rawTrack as PlaylistTrack;
-            state.currentIndex = 0;
+            state.currentIndex = index;
             state.currentTrack = track;
-            await notifyNowPlaying(client, state, track, 0, 1);
+            await notifyNowPlaying(client, state, track, index, total);
             await renderQuranPanel(client, state.guildId);
         },
         async () => {
