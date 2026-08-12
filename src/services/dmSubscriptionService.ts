@@ -74,6 +74,12 @@ export interface UserDMConfig extends UserDMSubscriptions {
         settings?: Record<string, unknown>;
         updatedAt?: string;
     };
+    panel?: {
+        channelId: string;
+        messageId: string;
+        pinned: boolean;
+        updatedAt: string;
+    };
 }
 
 export const DEFAULT_SUBSCRIPTIONS: UserDMSubscriptions = {
@@ -169,6 +175,7 @@ function mergeConfig(data: any = {}): UserDMConfig {
         khatma: data.khatma && typeof data.khatma === 'object' ? { ...(data.khatma as any) } : undefined,
         runtime: { ...DEFAULT_DM_CONFIG.runtime, ...(data.runtime || {}), sentEvents: data.runtime?.sentEvents || [] },
         dashboard: data.dashboard ? { ...data.dashboard } : undefined,
+        panel: data.panel && typeof data.panel === 'object' ? { ...data.panel } : undefined,
     };
 
     merged.adhan = merged.adhanConfig.enabled;

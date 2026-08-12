@@ -11,8 +11,9 @@ import {
     InteractionContextType,
     SlashCommandBuilder,
 } from 'discord.js';
-import { getUserDMConfig } from '../../services/dmSubscriptionService';
+import { getUserDMConfig, updateUserDMConfig } from '../../services/dmSubscriptionService';
 import { DM_PANEL_FOOTER, renderPanelEmbed, UI_COLORS } from '../../utils/uiRenderer';
+import { logger } from '../../utils/logger';
 import { buildDMPanelPayload } from './dmPanelHandler';
 
 export const data = new SlashCommandBuilder()
@@ -57,14 +58,53 @@ function buildDMIntroPayload(includeChannelPicker: boolean, iconURL?: string) {
     return { embeds: [embed], components: [openRow, channelRow] };
 }
 
-async function sendDMPanel(interaction: ChatInputCommandInteraction | ButtonInteraction) {
+export async function sendDMPanel(interaction: ChatInputCommandInteraction | ButtonInteraction) {
     const config = await getUserDMConfig(interaction.user.id);
     const iconURL = interaction.client.user?.displayAvatarURL({ extension: 'png', size: 128 });
     const panel = buildDMPanelPayload(config, 'home', iconURL);
 
     try {
-        await interaction.user.send(panel);
-        const content = "✅ تم إرسال لوحة إعداداتك الخاصة في الرسائل الخاصة. افتح رسائل البوت وكمل الإعدادات ديالك.";
+        const channel = await interaction.user.createDM();
+        let message = config.panel?.channelId === channel.id
+            ? await channel.messages.fetch(config.panel.messageId).catch(() => null)
+            : null;
+
+        if (!message) {
+            const pins = await channel.messages.fetchPins({ limit: 50 }).catch(() => null);
+            message = pins?.items
+                .map(item => item.message)
+                .find(item => item.author.id === interaction.client.user?.id
+                    && item.components.some(row => 'components' in row
+                        && row.components.some(component => 'customId' in component
+                            && component.customId?.startsWith('dm_panel_'))))
+                ?? null;
+        }
+
+        if (message?.author.id === interaction.client.user?.id) await message.edit(panel);
+        else message = await channel.send(panel);
+
+        let pinned = message.pinned;
+        if (!pinned) {
+            try {
+                await message.pin('لوحة إعدادات الرسائل الخاصة للمستخدم');
+                pinned = true;
+            } catch (error) {
+                logger.warn(`Could not pin DM panel for user ${interaction.user.id}:`, error);
+            }
+        }
+
+        await updateUserDMConfig(interaction.user.id, {
+            panel: {
+                channelId: channel.id,
+                messageId: message.id,
+                pinned,
+                updatedAt: new Date().toISOString(),
+            },
+        });
+
+        const content = pinned
+            ? '✅ تم إرسال لوحة إعداداتك الخاصة وتثبيتها في أعلى المحادثة.'
+            : '✅ تم إرسال لوحة إعداداتك الخاصة. تعذر تثبيتها تلقائيا، ويمكنك تثبيتها يدويا من قائمة الرسالة.';
         if (interaction.deferred || interaction.replied) await interaction.editReply({ content });
         else await interaction.reply({ content, flags: 64 });
     } catch {
