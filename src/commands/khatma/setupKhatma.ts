@@ -41,6 +41,9 @@ export interface KhatmaSetupSession {
 }
 
 export const activeKhatmaSetups = new Map<string, KhatmaSetupSession>();
+export function khatmaSetupKey(scope: 'guild' | 'dm', ownerId: string, guildId?: string) {
+    return `${scope}:${guildId || 'dm'}:${ownerId}`;
+}
 
 export const data = new SlashCommandBuilder()
     .setName('nakhtim')
@@ -48,26 +51,12 @@ export const data = new SlashCommandBuilder()
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply({ flags: 64 });
-
     if (!interaction.inGuild()) {
-        const config = await getUserDMConfig(interaction.user.id);
-        const khatma = config.khatma;
-        const session: KhatmaSetupSession = {
-            scope: 'dm',
-            ownerId: interaction.user.id,
-            enabled: khatma?.enabled ?? false,
-            mode: khatma?.mode ?? 'month',
-            pagesPerDay: khatma?.pagesPerDay || calculatePagesPerDay(khatma?.mode ?? 'month'),
-            ramadanKhatmas: khatma?.ramadanKhatmas ?? 1,
-            currentPage: khatma?.currentPage ?? 1,
-            lastSentAt: khatma?.lastSentAt,
-            updatedAt: khatma?.updatedAt,
-        };
-        activeKhatmaSetups.set(interaction.user.id, session);
-        await interaction.editReply(buildKhatmaSetupPayload(session));
+        await openDMKhatmaSetup(interaction);
         return;
     }
+
+    await interaction.deferReply({ flags: 64 });
 
     const guildId = interaction.guildId!;
     const state = await getGuildKhatma(guildId);
@@ -84,7 +73,26 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         lastSentAt: state?.lastSentAt,
         updatedAt: state?.updatedAt,
     };
-    activeKhatmaSetups.set(interaction.user.id, session);
+    activeKhatmaSetups.set(khatmaSetupKey('guild', interaction.user.id, guildId), session);
+    await interaction.editReply(buildKhatmaSetupPayload(session));
+}
+
+export async function openDMKhatmaSetup(interaction: any) {
+    if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ flags: 64 });
+    const config = await getUserDMConfig(interaction.user.id);
+    const khatma = config.khatma;
+    const session: KhatmaSetupSession = {
+        scope: 'dm',
+        ownerId: interaction.user.id,
+        enabled: khatma?.enabled ?? false,
+        mode: khatma?.mode ?? 'month',
+        pagesPerDay: khatma?.pagesPerDay || calculatePagesPerDay(khatma?.mode ?? 'month'),
+        ramadanKhatmas: khatma?.ramadanKhatmas ?? 1,
+        currentPage: khatma?.currentPage ?? 1,
+        lastSentAt: khatma?.lastSentAt,
+        updatedAt: khatma?.updatedAt,
+    };
+    activeKhatmaSetups.set(khatmaSetupKey('dm', interaction.user.id), session);
     await interaction.editReply(buildKhatmaSetupPayload(session));
 }
 
@@ -149,6 +157,11 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
                 .setLabel('إدخال معرّف القناة')
                 .setEmoji('🔢')
                 .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('khatma_setup_publish_personal')
+                .setLabel('نشر لوحة الورد الشخصي')
+                .setEmoji('📖')
+                .setStyle(ButtonStyle.Primary),
         );
     }
 

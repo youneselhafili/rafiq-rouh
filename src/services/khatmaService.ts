@@ -5,6 +5,7 @@ import { KhatmaState, KhatmaMode } from '../types';
 import { getAllUsersWithActiveKhatma, getUserDMConfig, updateUserDMConfig } from './dmSubscriptionService';
 import { logger } from '../utils/logger';
 import { getRolesConfig } from './rolesConfigService';
+import { sendPersonalKhatmaReminders } from './personalGuildKhatmaService';
 
 const KHATMA_MODULE = 'khatma';
 
@@ -195,6 +196,10 @@ export async function processAllKhatmas(client: Client) {
             logger.error(`Failed to process DM Khatma for ${userId}: ${error}`);
         }
     }
+
+    // The public reminder contains only a button. Each member's pages are
+    // delivered later as an ephemeral response to their own interaction.
+    await sendPersonalKhatmaReminders(client);
 }
 
 export function startKhatmaCron(client: Client) {

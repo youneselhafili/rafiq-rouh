@@ -72,6 +72,9 @@ export async function execute(interaction: Interaction) {
                 await handleJumuahSetupInteraction(interaction as any);
             } else if (interaction.customId.startsWith('khatma_setup_')) {
                 await handleKhatmaSetupInteraction(interaction as any);
+            } else if (interaction.customId.startsWith('personal_khatma_')) {
+                const { handlePersonalKhatmaInteraction } = await import('../commands/khatma/personalKhatmaHandler');
+                await handlePersonalKhatmaInteraction(interaction as any);
             } else if (interaction.customId.startsWith('quran_setup_')) {
                 const { handleQuranSetupInteraction } = await import('../commands/quran/quranSetupHandler');
                 await handleQuranSetupInteraction(interaction as any);
@@ -148,6 +151,12 @@ export async function execute(interaction: Interaction) {
 
             if (interaction.customId.startsWith('khatma_setup_')) {
                 await handleKhatmaSetupInteraction(interaction);
+                return;
+            }
+
+            if (interaction.customId.startsWith('personal_khatma_')) {
+                const { handlePersonalKhatmaInteraction } = await import('../commands/khatma/personalKhatmaHandler');
+                await handlePersonalKhatmaInteraction(interaction as any);
                 return;
             }
 
@@ -247,7 +256,6 @@ async function handleButton(interaction: ButtonInteraction) {
         }
     }
 }
-
 
 
 

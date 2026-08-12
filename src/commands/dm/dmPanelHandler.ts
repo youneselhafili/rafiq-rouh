@@ -133,6 +133,7 @@ function buildHome(config: UserDMConfig, iconURL?: string) {
     const personal = new ActionRowBuilder<ButtonBuilder>().addComponents(
         actionButton('dm_panel_city_set', 'المدينة', '📍'),
         actionButton('dm_panel_page_more', 'المزيد', '⚙️'),
+        actionButton('dm_panel_open_khatma', 'الختمة', '📖', ButtonStyle.Primary),
     );
     const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(
         actionButton('dm_panel_test', 'اختبار الرسائل الخاصة', '✉️'),
@@ -500,6 +501,10 @@ if (id === 'dm_panel_select_country') { const state = getLocationState(interacti
         return showPanel(interaction, 'location', config);
     }
     if (id === 'dm_panel_open') return showPanel(interaction, 'home', config);
+    if (id === 'dm_panel_open_khatma' && interaction.isButton()) {
+        const { openDMKhatmaSetup } = await import('../khatma/setupKhatma');
+        return openDMKhatmaSetup(interaction);
+    }
     if (id.startsWith('dm_panel_page_')) return showPanel(interaction, id.replace('dm_panel_page_', '') as DMPage, config);
     if (id === 'dm_panel_city_set' || id === 'dm_panel_zone_set') return showPanel(interaction, 'location', config);
 
@@ -547,7 +552,6 @@ export async function handleDMDeleteCountModal(interaction: ModalSubmitInteracti
     const deleted = await deleteNewestBotMessages(interaction, count);
     await showDeletePanel(interaction, `تم حذف ${deleted} رسالة من رسائل البوت.`);
 }
-
 
 
 

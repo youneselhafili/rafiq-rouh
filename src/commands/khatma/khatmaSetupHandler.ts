@@ -10,7 +10,7 @@ import {
     ChannelType,
 } from 'discord.js';
 import { KhatmaMode, KhatmaState } from '../../types';
-import { activeKhatmaSetups, buildKhatmaSetupPayload } from './setupKhatma';
+import { activeKhatmaSetups, buildKhatmaSetupPayload, khatmaSetupKey } from './setupKhatma';
 import {
     calculatePagesPerDay, setGuildKhatma, deleteGuildKhatma, QURAN_PAGE_IMAGE_BASE_URL,
     sendKhatmaPages, wasKhatmaSentToday,
@@ -18,11 +18,16 @@ import {
 import { getUserDMConfig, updateUserDMConfig } from '../../services/dmSubscriptionService';
 import { sendAuditLog } from '../../services/auditLogService';
 import { logger } from '../../utils/logger';
+import { buildPublicPersonalKhatmaPanel } from './personalKhatmaHandler';
+import { getPersonalKhatmaPanel, setPersonalKhatmaPanel } from '../../services/personalGuildKhatmaService';
 
 const MODE_ORDER: KhatmaMode[] = ['custom', 'week', 'month', '3_months', '6_months', 'ramadan'];
 
 export async function handleKhatmaSetupInteraction(interaction: any) {
-    const session = activeKhatmaSetups.get(interaction.user.id);
+    const lookupKey = interaction.guildId
+        ? khatmaSetupKey('guild', interaction.user.id, interaction.guildId)
+        : khatmaSetupKey('dm', interaction.user.id);
+    const session = activeKhatmaSetups.get(lookupKey);
     if (!session || session.ownerId !== interaction.user.id) {
         await interaction.reply({ content: '❌ انتهت جلسة الإعداد. استعمل `/nakhtim` من جديد.', flags: 64 });
         return;
@@ -94,6 +99,34 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
 
     if (!interaction.isButton?.()) return;
     const id = interaction.customId;
+
+    if (id === 'khatma_setup_publish_personal') {
+        if (session.scope !== 'guild' || !session.channelId) {
+            await interaction.reply({ content: '❌ اختر قناة كتابية أولاً، ثم انشر لوحة الورد الشخصي.', flags: 64 });
+            return;
+        }
+        await interaction.deferReply({ flags: 64 });
+        const channel = await interaction.guild?.channels.fetch(session.channelId).catch(() => null);
+        if (!channel || !('send' in channel) || typeof channel.send !== 'function') {
+            await interaction.editReply('❌ تعذر الوصول إلى القناة المختارة أو الإرسال فيها.');
+            return;
+        }
+        const existingPanel = await getPersonalKhatmaPanel(session.guildId!);
+        const existingMessage = existingPanel?.channelId === session.channelId && existingPanel.messageId
+            ? await channel.messages.fetch(existingPanel.messageId).catch(() => null)
+            : null;
+        const message = existingMessage
+            ? await existingMessage.edit(buildPublicPersonalKhatmaPanel())
+            : await channel.send(buildPublicPersonalKhatmaPanel());
+        await message.pin('لوحة الورد الشخصي للقرآن').catch(() => null);
+        await setPersonalKhatmaPanel(session.guildId!, {
+            channelId: session.channelId,
+            messageId: message.id,
+            updatedAt: new Date().toISOString(),
+        });
+        await interaction.editReply(`✅ تم نشر لوحة الورد الشخصي في <#${session.channelId}>. يستطيع كل عضو إعداد ختمته وقراءة صفحاته بخصوصية.`);
+        return;
+    }
 
     if (id === 'khatma_setup_channel_id') {
         const input = new TextInputBuilder()
@@ -176,7 +209,7 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
     }
 
     if (id === 'khatma_setup_cancel') {
-        activeKhatmaSetups.delete(interaction.user.id);
+        activeKhatmaSetups.delete(lookupKey);
         await interaction.update({ content: 'تم إلغاء الإعداد بدون حفظ.', embeds: [], components: [] });
         return;
     }
@@ -221,7 +254,7 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
                 },
             });
         }
-        activeKhatmaSetups.delete(interaction.user.id);
+        activeKhatmaSetups.delete(lookupKey);
         await interaction.editReply({ content: '✅ تم حذف إعداد الختمة.', components: [] });
         return;
     }
@@ -306,7 +339,7 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
             }
         }
 
-        activeKhatmaSetups.delete(interaction.user.id);
+        activeKhatmaSetups.delete(lookupKey);
         await interaction.editReply({
             embeds: [{
                 color: 0x57f287,
