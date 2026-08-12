@@ -1,5 +1,6 @@
 import {
     ActionRowBuilder,
+    ApplicationIntegrationType,
     ButtonBuilder,
     ButtonInteraction,
     ButtonStyle,
@@ -7,6 +8,7 @@ import {
     ChannelSelectMenuInteraction,
     ChannelType,
     ChatInputCommandInteraction,
+    InteractionContextType,
     SlashCommandBuilder,
 } from 'discord.js';
 import { getUserDMConfig } from '../../services/dmSubscriptionService';
@@ -15,7 +17,9 @@ import { buildDMPanelPayload } from './dmPanelHandler';
 
 export const data = new SlashCommandBuilder()
     .setName('setup_dm')
-    .setDescription("إعداد لوحة الرسائل الخاصة للمستخدمين");
+    .setDescription("إعداد لوحة الرسائل الخاصة للمستخدمين")
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel);
 
 function buildDMIntroPayload(includeChannelPicker: boolean, iconURL?: string) {
     const embed = renderPanelEmbed(

@@ -1,11 +1,13 @@
 import {
     ActionRowBuilder,
+    ApplicationIntegrationType,
     ButtonBuilder,
     ButtonStyle,
     ChannelSelectMenuBuilder,
     ChannelType,
     ChatInputCommandInteraction,
     EmbedBuilder,
+    InteractionContextType,
     PermissionFlagsBits,
     SlashCommandBuilder,
     StringSelectMenuBuilder,
@@ -48,6 +50,8 @@ export function khatmaSetupKey(scope: 'guild' | 'dm', ownerId: string, guildId?:
 export const data = new SlashCommandBuilder()
     .setName('nakhtim')
     .setDescription('إعداد ختمة القرآن الكريم اليومية')
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
 export async function execute(interaction: ChatInputCommandInteraction) {

@@ -1,6 +1,8 @@
 import {
+    ApplicationIntegrationType,
     ChatInputCommandInteraction,
     EmbedBuilder,
+    InteractionContextType,
     SlashCommandBuilder,
 } from 'discord.js';
 import { buildCatalogSummary } from '../../services/botInfoService';
@@ -9,7 +11,9 @@ const BRAND_COLOR = 0xD8AA4D;
 
 export const data = new SlashCommandBuilder()
     .setName('how_to_use')
-    .setDescription('دليل كامل لجميع أوامر رفيق الروح وطريقة استعمالها');
+    .setDescription('دليل كامل لجميع أوامر رفيق الروح وطريقة استعمالها')
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel);
 
 export function buildHowToUseEmbeds() {
     const overview = new EmbedBuilder()

@@ -1,9 +1,11 @@
 import {
     ActionRowBuilder,
+    ApplicationIntegrationType,
     ButtonBuilder,
     ButtonStyle,
     ChatInputCommandInteraction,
     EmbedBuilder,
+    InteractionContextType,
     SlashCommandBuilder,
 } from 'discord.js';
 import { buildCatalogSummary } from '../../services/botInfoService';
@@ -13,7 +15,9 @@ const CIH_RIB = '230450524541421101740066';
 
 export const data = new SlashCommandBuilder()
     .setName('donate')
-    .setDescription('ادعم مطوّر رفيق الروح لتغطية تكاليف الخادم والخدمة');
+    .setDescription('ادعم مطوّر رفيق الروح لتغطية تكاليف الخادم والخدمة')
+    .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+    .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel);
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     const embed = new EmbedBuilder()
