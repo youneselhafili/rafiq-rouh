@@ -9,6 +9,7 @@ import {
     ChannelType,
     ChatInputCommandInteraction,
     InteractionContextType,
+    Message,
     SlashCommandBuilder,
 } from 'discord.js';
 import { getUserDMConfig, updateUserDMConfig } from '../../services/dmSubscriptionService';
@@ -58,6 +59,13 @@ function buildDMIntroPayload(includeChannelPicker: boolean, iconURL?: string) {
     return { embeds: [embed], components: [openRow, channelRow] };
 }
 
+function isDMPanelMessage(message: Message, botId?: string): boolean {
+    return message.author.id === botId
+        && message.components.some(row => 'components' in row
+            && row.components.some(component => 'customId' in component
+                && component.customId?.startsWith('dm_panel_')));
+}
+
 export async function sendDMPanel(interaction: ChatInputCommandInteraction | ButtonInteraction) {
     const config = await getUserDMConfig(interaction.user.id);
     const iconURL = interaction.client.user?.displayAvatarURL({ extension: 'png', size: 128 });
@@ -65,23 +73,36 @@ export async function sendDMPanel(interaction: ChatInputCommandInteraction | But
 
     try {
         const channel = await interaction.user.createDM();
-        let message = config.panel?.channelId === channel.id
+        const knownMessage = config.panel?.channelId === channel.id
             ? await channel.messages.fetch(config.panel.messageId).catch(() => null)
             : null;
-
-        if (!message) {
-            const pins = await channel.messages.fetchPins({ limit: 50 }).catch(() => null);
-            message = pins?.items
-                .map(item => item.message)
-                .find(item => item.author.id === interaction.client.user?.id
-                    && item.components.some(row => 'components' in row
-                        && row.components.some(component => 'customId' in component
-                            && component.customId?.startsWith('dm_panel_'))))
-                ?? null;
+        const candidates = new Map<string, Message>();
+        if (knownMessage && isDMPanelMessage(knownMessage, interaction.client.user?.id)) {
+            candidates.set(knownMessage.id, knownMessage);
         }
 
-        if (message?.author.id === interaction.client.user?.id) await message.edit(panel);
+        const [pins, recent] = await Promise.all([
+            channel.messages.fetchPins({ limit: 50 }).catch(() => null),
+            channel.messages.fetch({ limit: 50 }).catch(() => null),
+        ]);
+        for (const item of pins?.items ?? []) {
+            if (isDMPanelMessage(item.message, interaction.client.user?.id)) candidates.set(item.message.id, item.message);
+        }
+        for (const item of recent?.values() ?? []) {
+            if (isDMPanelMessage(item, interaction.client.user?.id)) candidates.set(item.id, item);
+        }
+
+        let message = knownMessage && candidates.get(knownMessage.id)
+            || [...candidates.values()].find(item => item.pinned)
+            || [...candidates.values()].sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0]
+            || null;
+
+        if (message) await message.edit(panel);
         else message = await channel.send(panel);
+
+        // Invariant: only one bot-owned DM panel may remain for this user.
+        const duplicates = [...candidates.values()].filter(item => item.id !== message.id);
+        await Promise.allSettled(duplicates.map(item => item.delete()));
 
         let pinned = message.pinned;
         if (!pinned) {
@@ -103,8 +124,8 @@ export async function sendDMPanel(interaction: ChatInputCommandInteraction | But
         });
 
         const content = pinned
-            ? '✅ تم إرسال لوحة إعداداتك الخاصة وتثبيتها في أعلى المحادثة.'
-            : '✅ تم إرسال لوحة إعداداتك الخاصة. تعذر تثبيتها تلقائيا، ويمكنك تثبيتها يدويا من قائمة الرسالة.';
+            ? '✅ تم تحديث لوحة إعداداتك الخاصة وتثبيتها في أعلى المحادثة دون إنشاء نسخة مكررة.'
+            : '✅ تم تحديث لوحة إعداداتك الخاصة دون إنشاء نسخة مكررة. تعذر تثبيتها تلقائيا، ويمكنك تثبيتها يدويا.';
         if (interaction.deferred || interaction.replied) await interaction.editReply({ content });
         else await interaction.reply({ content, flags: 64 });
     } catch {
