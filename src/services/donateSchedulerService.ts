@@ -11,7 +11,8 @@
 import * as cron from 'node-cron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { canAttemptFirebase, getDb, recordFirebaseFailure, recordFirebaseSuccess } from '../config/firebase';
 import { logger } from '../utils/logger';
 import {
     getGuildDonateConfig,
@@ -22,6 +23,7 @@ import {
 import { isFirestoreAvailable } from './guildConfigService';
 import { getAllDMUserConfigs } from './dmSubscriptionService';
 import { buildCatalogSummary } from './botInfoService';
+import { writeJsonAtomic } from '../utils/localJsonStore';
 
 const PAYPAL_URL = 'https://www.paypal.com/paypalme/youneselhafili';
 const CIH_RIB = '230450524541421101740066';
@@ -35,15 +37,16 @@ interface GlobalDonateState {
 }
 
 async function getGlobalDonateState(): Promise<GlobalDonateState> {
-    if (isFirestoreAvailable()) {
+    if (isFirestoreAvailable() && canAttemptFirebase()) {
         try {
-            const snap = await getFirestore().doc('globals/donate').get();
+            const snap = await getDb().doc('globals/donate').get();
             if (snap.exists) {
                 const data = snap.data();
+                recordFirebaseSuccess();
                 return { lastGlobalDMVerify: data?.lastGlobalDMVerify };
             }
         } catch (error) {
-            logger.error('Failed to get global donate state from Firestore:', error);
+            recordFirebaseFailure(error, 'read global donate state');
         }
     }
 
@@ -59,26 +62,22 @@ async function getGlobalDonateState(): Promise<GlobalDonateState> {
 }
 
 async function saveGlobalDonateState(state: GlobalDonateState): Promise<void> {
-    if (isFirestoreAvailable()) {
+    try {
+        writeJsonAtomic(GLOBAL_DONATE_FILE, state);
+    } catch (error) {
+        logger.error('Failed to save global donate state locally:', error);
+    }
+
+    if (isFirestoreAvailable() && canAttemptFirebase()) {
         try {
-            await getFirestore().doc('globals/donate').set({
+            await getDb().doc('globals/donate').set({
                 lastGlobalDMVerify: state.lastGlobalDMVerify || new Date().toISOString(),
                 updatedAt: FieldValue.serverTimestamp()
             }, { merge: true });
-            return;
+            recordFirebaseSuccess();
         } catch (error) {
-            logger.error('Failed to save global donate state to Firestore:', error);
+            recordFirebaseFailure(error, 'save global donate state');
         }
-    }
-
-    try {
-        const dir = path.dirname(GLOBAL_DONATE_FILE);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(GLOBAL_DONATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
-    } catch (error) {
-        logger.error('Failed to save global donate state locally:', error);
     }
 }
 
@@ -244,25 +243,23 @@ async function checkAndRunDMGlobalBroadcast(client: Client, now: Date) {
 
     logger.info('📢 Triggering 91-day Global Donation DM Broadcast...');
 
-    if (isFirestoreAvailable()) {
-        try {
-            const userConfigs = await getAllDMUserConfigs();
-            for (const { userId, config } of userConfigs) {
-                if (!config.enabled) continue;
-                try {
-                    const user = await client.users.fetch(userId);
-                    if (user) {
-                        const embed = buildDonateEmbed(client, '💝 رسالة خاصة دورية: ادعم رفيق الروح');
-                        const buttons = buildDonateButtons();
-                        await user.send({ embeds: [embed], components: [buttons] });
-                    }
-                } catch (dmError) {
-                    // Ignore blocked DMs
+    try {
+        const userConfigs = await getAllDMUserConfigs();
+        for (const { userId, config } of userConfigs) {
+            if (!config.enabled) continue;
+            try {
+                const user = await client.users.fetch(userId);
+                if (user) {
+                    const embed = buildDonateEmbed(client, '💝 رسالة خاصة دورية: ادعم رفيق الروح');
+                    const buttons = buildDonateButtons();
+                    await user.send({ embeds: [embed], components: [buttons] });
                 }
+            } catch (dmError) {
+                // Ignore blocked DMs
             }
-        } catch (dmFetchError) {
-            logger.error('Failed to run DM broadcasts:', dmFetchError);
         }
+    } catch (dmFetchError) {
+        logger.error('Failed to run DM broadcasts:', dmFetchError);
     }
 
     await saveGlobalDonateState({ lastGlobalDMVerify: now.toISOString() });

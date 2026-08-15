@@ -2,7 +2,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { createHash, randomUUID } from 'crypto';
-import { getFirestore } from 'firebase-admin/firestore';
+import {
+    canAttemptFirebase,
+    getDb,
+    recordFirebaseFailure,
+    recordFirebaseSuccess,
+} from '../config/firebase';
 import { isFirestoreAvailable } from './guildConfigService';
 import { logger } from '../utils/logger';
 
@@ -61,11 +66,11 @@ function acquireLocalLock(): boolean {
 }
 
 async function claimFirestoreLease(): Promise<boolean> {
-    if (!isFirestoreAvailable()) return true;
-    const db = getFirestore();
+    if (!isFirestoreAvailable() || !canAttemptFirebase()) return true;
+    const db = getDb();
     const ref = db.doc(LEASE_DOC);
     const now = Date.now();
-    return db.runTransaction(async transaction => {
+    const claimed = await db.runTransaction(async transaction => {
         const snapshot = await transaction.get(ref);
         const current = snapshot.data() as { ownerId?: string; deploymentId?: string; expiresAt?: number } | undefined;
         if (
@@ -76,13 +81,16 @@ async function claimFirestoreLease(): Promise<boolean> {
         transaction.set(ref, { ownerId, deploymentId, pid: process.pid, host: os.hostname(), expiresAt: now + LEASE_MS });
         return true;
     });
+    recordFirebaseSuccess();
+    return claimed;
 }
 
 function startLeaseRenewal(): void {
     if (!isFirestoreAvailable() || renewTimer) return;
     renewTimer = setInterval(async () => {
         try {
-            const db = getFirestore();
+            if (!canAttemptFirebase()) return;
+            const db = getDb();
             const ref = db.doc(LEASE_DOC);
             const renewed = await db.runTransaction(async transaction => {
                 const snapshot = await transaction.get(ref);
@@ -93,9 +101,9 @@ function startLeaseRenewal(): void {
             if (!renewed) {
                 primary = false;
                 logger.error('[Runtime] Primary lease was lost; this instance will ignore new Discord events.');
-            }
+            } else recordFirebaseSuccess();
         } catch (error) {
-            logger.warn(`[Runtime] Could not renew primary lease: ${error instanceof Error ? error.message : String(error)}`);
+            recordFirebaseFailure(error, 'renew runtime lease');
         }
     }, RENEW_MS);
     renewTimer.unref?.();
@@ -114,9 +122,8 @@ export async function acquirePrimaryRuntime(): Promise<boolean> {
             return false;
         }
     } catch (error) {
-        releaseLocalLock();
-        logger.error(`[Runtime] Failed to acquire primary lease: ${error instanceof Error ? error.message : String(error)}`);
-        return false;
+        recordFirebaseFailure(error, 'claim runtime lease');
+        logger.warn('[Runtime] Continuing with the local single-process lock while Firebase is unavailable.');
     }
     primary = true;
     startLeaseRenewal();

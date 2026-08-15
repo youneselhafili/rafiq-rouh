@@ -1,5 +1,14 @@
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import * as fs from 'fs';
+import * as path from 'path';
+import {
+    canAttemptFirebase,
+    getDb,
+    recordFirebaseFailure,
+    recordFirebaseSuccess,
+} from '../config/firebase';
 import { logger } from '../utils/logger';
+import { writeJsonAtomic } from '../utils/localJsonStore';
 
 export type DMLanguage = 'ar' | 'darija' | 'en' | 'fr';
 export type DMFormat = 'full' | 'compact';
@@ -127,9 +136,16 @@ export const DEFAULT_DM_CONFIG: UserDMConfig = {
 
 const LEGACY_KEYS = Object.keys(DEFAULT_SUBSCRIPTIONS) as (keyof UserDMSubscriptions)[];
 const ADHKAR_KEYS = Object.keys(DEFAULT_DM_CONFIG.adhkarConfig.categories) as (keyof UserDMConfig['adhkarConfig']['categories'])[];
+const USERS_DIR = path.join(process.cwd(), 'data', 'users');
+
+interface LocalUserEnvelope {
+    config: Record<string, any>;
+    pendingFirebase: boolean;
+    updatedAt: string;
+}
 
 function db() {
-    return getFirestore();
+    return getDb();
 }
 
 function userDoc(userId: string) {
@@ -138,6 +154,41 @@ function userDoc(userId: string) {
 
 function userRef(userId: string) {
     return db().doc(`users/${userId}/preferences/dm`);
+}
+
+function localUserFile(userId: string): string {
+    return path.join(USERS_DIR, `${userId}.json`);
+}
+
+function readLocalUser(userId: string): LocalUserEnvelope | null {
+    try {
+        const file = localUserFile(userId);
+        if (!fs.existsSync(file)) return null;
+        const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (data?.config && typeof data.config === 'object') return data as LocalUserEnvelope;
+        return { config: data || {}, pendingFirebase: false, updatedAt: new Date(0).toISOString() };
+    } catch (error) {
+        logger.warn(`[Storage] Failed to read local DM config for ${userId}: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+    }
+}
+
+function writeLocalUser(userId: string, config: Record<string, any>, pendingFirebase: boolean): void {
+    const envelope: LocalUserEnvelope = { config, pendingFirebase, updatedAt: new Date().toISOString() };
+    writeJsonAtomic(localUserFile(userId), envelope);
+}
+
+async function writeRemoteUser(userId: string, config: Record<string, any>): Promise<boolean> {
+    if (!canAttemptFirebase()) return false;
+    try {
+        await userDoc(userId).set({ updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        await userRef(userId).set({ ...config, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        recordFirebaseSuccess();
+        return true;
+    } catch (error) {
+        recordFirebaseFailure(error, `save DM config/${userId}`);
+        return false;
+    }
 }
 
 function mergeConfig(data: any = {}): UserDMConfig {
@@ -199,25 +250,33 @@ function flattenConfig(config: UserDMConfig): Record<string, any> {
 }
 
 export async function getUserDMConfig(userId: string): Promise<UserDMConfig> {
+    let local = readLocalUser(userId);
+    if (local?.pendingFirebase) {
+        if (await writeRemoteUser(userId, local.config)) {
+            writeLocalUser(userId, local.config, false);
+            local = readLocalUser(userId);
+        }
+        return mergeConfig(local?.config || {});
+    }
+    if (!canAttemptFirebase()) return mergeConfig(local?.config || {});
     try {
         const snap = await userRef(userId).get();
-        return mergeConfig(snap.exists ? snap.data() : {});
+        recordFirebaseSuccess();
+        if (!snap.exists) return mergeConfig(local?.config || {});
+        const config = mergeConfig(snap.data() || {});
+        writeLocalUser(userId, flattenConfig(config), false);
+        return config;
     } catch (error) {
-        logger.error(`Failed to read DM config for user ${userId}:`, error);
-        return { ...DEFAULT_DM_CONFIG };
+        recordFirebaseFailure(error, `read DM config/${userId}`);
+        return mergeConfig(local?.config || {});
     }
 }
 
 export async function updateUserDMConfig(userId: string, partialConfig: Partial<UserDMConfig>): Promise<void> {
-    try {
-        const current = await getUserDMConfig(userId);
-        const merged = mergeConfig({ ...current, ...partialConfig });
-        await userDoc(userId).set({ updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-        await userRef(userId).set({ ...flattenConfig(merged), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    } catch (error) {
-        logger.error(`Failed to update DM config for user ${userId}:`, error);
-        throw error;
-    }
+    const current = await getUserDMConfig(userId);
+    const merged = flattenConfig(mergeConfig({ ...current, ...partialConfig }));
+    writeLocalUser(userId, merged, true);
+    if (await writeRemoteUser(userId, merged)) writeLocalUser(userId, merged, false);
 }
 
 export async function getUserDMSubscriptions(userId: string): Promise<UserDMSubscriptions> {
@@ -268,20 +327,38 @@ export async function addDMSentEvent(userId: string, eventKey: string): Promise<
 }
 
 export async function getAllDMUserConfigs(): Promise<Array<{ userId: string; config: UserDMConfig }>> {
-    const result: Array<{ userId: string; config: UserDMConfig }> = [];
+    const byUser = new Map<string, UserDMConfig>();
+    fs.mkdirSync(USERS_DIR, { recursive: true });
+    for (const filename of fs.readdirSync(USERS_DIR).filter(name => name.endsWith('.json'))) {
+        const userId = filename.slice(0, -5);
+        let local = readLocalUser(userId);
+        if (!local) continue;
+        if (local.pendingFirebase && await writeRemoteUser(userId, local.config)) {
+            writeLocalUser(userId, local.config, false);
+            local = readLocalUser(userId)!;
+        }
+        byUser.set(userId, mergeConfig(local.config));
+    }
+    if (!canAttemptFirebase()) return [...byUser].map(([userId, config]) => ({ userId, config }));
     try {
         const snap = await db().collectionGroup('preferences').get();
         for (const doc of snap.docs) {
             if (doc.id !== 'dm') continue;
             const parts = doc.ref.path.split('/');
             if (parts.length >= 4 && parts[parts.length - 4] === 'users') {
-                result.push({ userId: parts[parts.length - 3], config: mergeConfig(doc.data()) });
+                const userId = parts[parts.length - 3];
+                const local = readLocalUser(userId);
+                if (local?.pendingFirebase) continue;
+                const config = mergeConfig(doc.data());
+                writeLocalUser(userId, flattenConfig(config), false);
+                byUser.set(userId, config);
             }
         }
+        recordFirebaseSuccess();
     } catch (error) {
-        logger.error('Failed to fetch DM user configs:', error);
+        recordFirebaseFailure(error, 'list DM configs');
     }
-    return result;
+    return [...byUser].map(([userId, config]) => ({ userId, config }));
 }
 
 export async function getSubscribedUsers(feature: keyof UserDMSubscriptions, filterZone?: string): Promise<string[]> {

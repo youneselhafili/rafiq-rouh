@@ -46,10 +46,13 @@ async function bootstrap() {
     try {
         logger.info('🚀 Starting رفيق الروح bot...');
 
-        // 1. Firebase is required in production. Continuing without it creates
-        // isolated schedulers that cannot share delivery locks and may duplicate
-        // reminders across processes or deployments.
-        initializeFirebase();
+        // Firebase is the remote mirror. Local storage remains authoritative
+        // while Firebase is unavailable, rate-limited, or not configured.
+        try {
+            initializeFirebase();
+        } catch (error) {
+            logger.warn(`[Storage] Firebase could not start; continuing in local-only mode. ${error instanceof Error ? error.message : String(error)}`);
+        }
 
         // 2. Initialize Content Catalogs
         initContentService();

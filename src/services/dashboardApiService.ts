@@ -11,7 +11,12 @@ import {
     PermissionFlagsBits,
 } from 'discord.js';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getDb } from '../config/firebase';
+import {
+    canAttemptFirebase,
+    getDb,
+    recordFirebaseFailure,
+    recordFirebaseSuccess,
+} from '../config/firebase';
 import { getUserDMConfig, updateUserDMConfig, UserDMConfig } from './dmSubscriptionService';
 import { getModuleConfig, setModuleConfig } from './guildConfigService';
 import { logger } from '../utils/logger';
@@ -123,21 +128,21 @@ async function bodyJson(request: IncomingMessage): Promise<Record<string, any>> 
 }
 
 function firestoreAvailable(): boolean {
-    try {
-        getDb();
-        return true;
-    } catch {
-        return false;
-    }
+    return canAttemptFirebase();
 }
 
 async function putSession(token: string, session: DashboardSession): Promise<void> {
     memorySessions.set(sessionKey(token), session);
     if (!firestoreAvailable()) return;
-    await getDb().doc(`dashboardSessions/${sessionKey(token)}`).set({
-        ...session,
-        createdAt: FieldValue.serverTimestamp(),
-    });
+    try {
+        await getDb().doc(`dashboardSessions/${sessionKey(token)}`).set({
+            ...session,
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        recordFirebaseSuccess();
+    } catch (error) {
+        recordFirebaseFailure(error, 'save dashboard session');
+    }
 }
 
 async function readSession(token: string): Promise<DashboardSession | null> {
@@ -149,15 +154,21 @@ async function readSession(token: string): Promise<DashboardSession | null> {
         memorySessions.delete(key);
     }
     if (!firestoreAvailable()) return null;
-    const snap = await getDb().doc(`dashboardSessions/${key}`).get();
-    if (!snap.exists) return null;
-    const data = snap.data() as DashboardSession;
-    if (!data || Number(data.expiresAt) <= Date.now()) {
-        await snap.ref.delete().catch(() => undefined);
+    try {
+        const snap = await getDb().doc(`dashboardSessions/${key}`).get();
+        recordFirebaseSuccess();
+        if (!snap.exists) return null;
+        const data = snap.data() as DashboardSession;
+        if (!data || Number(data.expiresAt) <= Date.now()) {
+            await snap.ref.delete().catch(() => undefined);
+            return null;
+        }
+        memorySessions.set(key, data);
+        return data;
+    } catch (error) {
+        recordFirebaseFailure(error, 'read dashboard session');
         return null;
     }
-    memorySessions.set(key, data);
-    return data;
 }
 
 async function deleteSession(token: string): Promise<void> {
@@ -358,13 +369,18 @@ async function handleOAuthCallback(request: IncomingMessage, response: ServerRes
         const sessionToken = randomBytes(36).toString('base64url');
         await putSession(sessionToken, { user, oauthGuilds, expiresAt: Date.now() + SESSION_TTL_MS });
         if (firestoreAvailable()) {
-            await getDb().doc(`users/${user.id}`).set({
-                discordId: user.id,
-                username: user.username,
-                globalName: user.globalName || null,
-                avatarUrl: avatarUrl(user),
-                updatedAt: FieldValue.serverTimestamp(),
-            }, { merge: true });
+            try {
+                await getDb().doc(`users/${user.id}`).set({
+                    discordId: user.id,
+                    username: user.username,
+                    globalName: user.globalName || null,
+                    avatarUrl: avatarUrl(user),
+                    updatedAt: FieldValue.serverTimestamp(),
+                }, { merge: true });
+                recordFirebaseSuccess();
+            } catch (error) {
+                recordFirebaseFailure(error, `save dashboard profile/${user.id}`);
+            }
         }
         redirect(response, '/', {
             'Set-Cookie': [

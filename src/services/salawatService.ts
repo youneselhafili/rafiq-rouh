@@ -3,7 +3,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import moment from 'moment-timezone';
 import { AttachmentBuilder, Client, EmbedBuilder } from 'discord.js';
-import { getFirestore } from 'firebase-admin/firestore';
+import {
+    canAttemptFirebase,
+    getDb,
+    recordFirebaseFailure,
+    recordFirebaseSuccess,
+} from '../config/firebase';
 import { generateSalawatImage } from './canvasService';
 import { tryBuildAttachment } from './canvasFallback';
 import { getAdvancedConfig, setAdvancedConfig } from './advancedConfigService';
@@ -110,15 +115,22 @@ async function channelHasRecentSalawat(channel: any, client: Client): Promise<bo
 
 async function claimSalawatSend(guildId: string): Promise<boolean> {
     const claimedAt = new Date().toISOString();
-    if (isFirestoreAvailable()) {
-        const ref = getFirestore().doc(`guilds/${guildId}/${RUNTIME_MODULE}/default`);
-        return getFirestore().runTransaction(async transaction => {
-            const snapshot = await transaction.get(ref);
-            const runtime = (snapshot.data() || {}) as Partial<SalawatRuntime>;
-            if (isRecent(runtime.lastClaimedAt) || isRecent(runtime.lastSentAt)) return false;
-            transaction.set(ref, { lastClaimedAt: claimedAt }, { merge: true });
-            return true;
-        });
+    if (isFirestoreAvailable() && canAttemptFirebase()) {
+        try {
+            const database = getDb();
+            const ref = database.doc(`guilds/${guildId}/${RUNTIME_MODULE}/default`);
+            const claimed = await database.runTransaction(async transaction => {
+                const snapshot = await transaction.get(ref);
+                const runtime = (snapshot.data() || {}) as Partial<SalawatRuntime>;
+                if (isRecent(runtime.lastClaimedAt) || isRecent(runtime.lastSentAt)) return false;
+                transaction.set(ref, { lastClaimedAt: claimedAt }, { merge: true });
+                return true;
+            });
+            recordFirebaseSuccess();
+            return claimed;
+        } catch (error) {
+            recordFirebaseFailure(error, `claim Salawat send/${guildId}`);
+        }
     }
 
     const runtime = await runtimeFor(guildId);

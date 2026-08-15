@@ -5,6 +5,8 @@ import * as fs from 'fs';
 import { logger } from '../utils/logger';
 
 let db: ReturnType<typeof getFirestore> | null = null;
+let retryAfter = 0;
+let consecutiveFailures = 0;
 
 function resolveServiceAccountPath(configuredPath: string): string {
     if (path.isAbsolute(configuredPath)) return configuredPath;
@@ -48,7 +50,30 @@ export function initializeFirebase(): void {
 
     db = getFirestore();
     db.settings({ ignoreUndefinedProperties: true });
+    retryAfter = 0;
+    consecutiveFailures = 0;
     logger.success('✅ Firebase initialized successfully.');
+}
+
+export function isFirebaseInitialized(): boolean {
+    return db !== null;
+}
+
+export function canAttemptFirebase(): boolean {
+    return db !== null && Date.now() >= retryAfter;
+}
+
+export function recordFirebaseSuccess(): void {
+    retryAfter = 0;
+    consecutiveFailures = 0;
+}
+
+export function recordFirebaseFailure(error: unknown, context: string): void {
+    consecutiveFailures += 1;
+    const cooldownMs = Math.min(5 * 60_000, 15_000 * (2 ** Math.min(consecutiveFailures - 1, 4)));
+    retryAfter = Date.now() + cooldownMs;
+    const reason = error instanceof Error ? error.message : String(error);
+    logger.warn(`[Storage] Firebase unavailable during ${context}; using local storage for at least ${Math.round(cooldownMs / 1000)}s. ${reason}`);
 }
 
 export function getDb(): ReturnType<typeof getFirestore> {

@@ -12,6 +12,7 @@ import { startDashboardApi } from '../services/dashboardApiService';
 import { acquirePrimaryRuntime } from '../services/runtimeLeadershipService';
 import { initDonateScheduler } from '../services/donateSchedulerService';
 import { buildApplicationDescription, getBotCatalogStats } from '../services/botInfoService';
+import { warmLocalStorageMirror } from '../services/storageWarmupService';
 
 export const name = Events.ClientReady;
 export const once = true;
@@ -52,6 +53,7 @@ export async function execute(client: ExtendedClient) {
         return;
     }
     startDashboardApi(client);
+    await warmLocalStorageMirror(client);
 
     // Deploy slash commands to Discord
     await deployCommands(client);

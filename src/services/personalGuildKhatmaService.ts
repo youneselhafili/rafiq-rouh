@@ -1,10 +1,17 @@
 import { Client, TextChannel } from 'discord.js';
-import { FieldValue } from 'firebase-admin/firestore';
-import { getDb } from '../config/firebase';
+import * as fs from 'fs';
+import * as path from 'path';
+import {
+    canAttemptFirebase,
+    getDb,
+    recordFirebaseFailure,
+    recordFirebaseSuccess,
+} from '../config/firebase';
 import { KhatmaMode } from '../types';
 import { getAllModuleConfigs, getModuleConfig, setModuleConfig } from './guildConfigService';
 import { getRolesConfig } from './rolesConfigService';
 import { logger } from '../utils/logger';
+import { writeJsonAtomic } from '../utils/localJsonStore';
 
 export const PERSONAL_KHATMA_PANEL_MODULE = 'personal_khatma_panel';
 
@@ -41,8 +48,73 @@ export interface PersonalKhatmaProgress {
     isAhead: boolean;
 }
 
+interface LocalPersonalEnvelope {
+    config?: PersonalGuildKhatmaConfig;
+    deleted?: boolean;
+    pendingFirebase: boolean;
+    updatedAt: string;
+}
+
+const PERSONAL_DIR = path.join(process.cwd(), 'data', 'personal-khatmas');
+const personalLocks = new Map<string, Promise<void>>();
+
 function userRef(guildId: string, userId: string) {
     return getDb().doc(`guilds/${guildId}/personalKhatmas/${userId}`);
+}
+
+function localGuildDir(guildId: string): string {
+    return path.join(PERSONAL_DIR, guildId);
+}
+
+function localUserFile(guildId: string, userId: string): string {
+    return path.join(localGuildDir(guildId), `${userId}.json`);
+}
+
+function readLocalPersonal(guildId: string, userId: string): LocalPersonalEnvelope | null {
+    try {
+        const file = localUserFile(guildId, userId);
+        if (!fs.existsSync(file)) return null;
+        return JSON.parse(fs.readFileSync(file, 'utf8')) as LocalPersonalEnvelope;
+    } catch (error) {
+        logger.warn(`[Storage] Failed to read local personal Khatma ${guildId}/${userId}: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+    }
+}
+
+function writeLocalPersonal(guildId: string, userId: string, envelope: Omit<LocalPersonalEnvelope, 'updatedAt'> & { updatedAt?: string }): void {
+    writeJsonAtomic(localUserFile(guildId, userId), {
+        ...envelope,
+        updatedAt: envelope.updatedAt || new Date().toISOString(),
+    });
+}
+
+async function syncRemotePersonal(guildId: string, userId: string, envelope: LocalPersonalEnvelope): Promise<boolean> {
+    if (!canAttemptFirebase()) return false;
+    try {
+        if (envelope.deleted) await userRef(guildId, userId).delete();
+        else if (envelope.config) await userRef(guildId, userId).set(envelope.config);
+        recordFirebaseSuccess();
+        writeLocalPersonal(guildId, userId, { ...envelope, pendingFirebase: false });
+        return true;
+    } catch (error) {
+        recordFirebaseFailure(error, `sync personal Khatma/${guildId}/${userId}`);
+        return false;
+    }
+}
+
+async function withPersonalLock<T>(key: string, action: () => Promise<T>): Promise<T> {
+    const previous = personalLocks.get(key) || Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>(resolve => { release = resolve; });
+    const queued = previous.then(() => current);
+    personalLocks.set(key, queued);
+    await previous;
+    try {
+        return await action();
+    } finally {
+        release();
+        if (personalLocks.get(key) === queued) personalLocks.delete(key);
+    }
 }
 
 export function meccaDateKey(value: Date | string = new Date()): string {
@@ -84,26 +156,68 @@ function normalizeConfig(guildId: string, userId: string, data: Partial<Personal
 }
 
 export async function getPersonalGuildKhatma(guildId: string, userId: string): Promise<PersonalGuildKhatmaConfig | null> {
-    const snap = await userRef(guildId, userId).get();
-    if (!snap.exists) return null;
-    return normalizeConfig(guildId, userId, snap.data() || {});
+    let local = readLocalPersonal(guildId, userId);
+    if (local?.pendingFirebase) {
+        await syncRemotePersonal(guildId, userId, local);
+        local = readLocalPersonal(guildId, userId);
+        return local?.deleted || !local?.config ? null : normalizeConfig(guildId, userId, local.config);
+    }
+    if (!canAttemptFirebase()) return local?.deleted || !local?.config ? null : normalizeConfig(guildId, userId, local.config);
+    try {
+        const snap = await userRef(guildId, userId).get();
+        recordFirebaseSuccess();
+        if (!snap.exists) return local?.deleted || !local?.config ? null : normalizeConfig(guildId, userId, local.config);
+        const config = normalizeConfig(guildId, userId, snap.data() || {});
+        writeLocalPersonal(guildId, userId, { config, pendingFirebase: false });
+        return config;
+    } catch (error) {
+        recordFirebaseFailure(error, `read personal Khatma/${guildId}/${userId}`);
+        return local?.deleted || !local?.config ? null : normalizeConfig(guildId, userId, local.config);
+    }
 }
 
 export async function savePersonalGuildKhatma(config: PersonalGuildKhatmaConfig): Promise<void> {
     const normalized = normalizeConfig(config.guildId, config.userId, { ...config, updatedAt: new Date().toISOString() });
-    await getDb().doc(`guilds/${config.guildId}`).set({ updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-    await userRef(config.guildId, config.userId).set(normalized);
+    const envelope: LocalPersonalEnvelope = { config: normalized, pendingFirebase: true, updatedAt: normalized.updatedAt };
+    writeLocalPersonal(config.guildId, config.userId, envelope);
+    await syncRemotePersonal(config.guildId, config.userId, envelope);
 }
 
 export async function deletePersonalGuildKhatma(guildId: string, userId: string): Promise<void> {
-    await userRef(guildId, userId).delete();
+    const envelope: LocalPersonalEnvelope = { deleted: true, pendingFirebase: true, updatedAt: new Date().toISOString() };
+    writeLocalPersonal(guildId, userId, envelope);
+    await syncRemotePersonal(guildId, userId, envelope);
 }
 
 export async function listPersonalGuildKhatmas(guildId: string, enabledOnly = false): Promise<PersonalGuildKhatmaConfig[]> {
-    const snap = await getDb().collection(`guilds/${guildId}/personalKhatmas`).get();
-    return snap.docs
-        .map(doc => normalizeConfig(guildId, doc.id, doc.data()))
-        .filter(config => !enabledOnly || config.enabled);
+    const byUser = new Map<string, PersonalGuildKhatmaConfig>();
+    fs.mkdirSync(localGuildDir(guildId), { recursive: true });
+    for (const filename of fs.readdirSync(localGuildDir(guildId)).filter(name => name.endsWith('.json'))) {
+        const userId = filename.slice(0, -5);
+        let local = readLocalPersonal(guildId, userId);
+        if (!local) continue;
+        if (local.pendingFirebase) {
+            await syncRemotePersonal(guildId, userId, local);
+            local = readLocalPersonal(guildId, userId);
+        }
+        if (!local?.deleted && local?.config) byUser.set(userId, normalizeConfig(guildId, userId, local.config));
+    }
+    if (canAttemptFirebase()) {
+        try {
+            const snap = await getDb().collection(`guilds/${guildId}/personalKhatmas`).get();
+            for (const doc of snap.docs) {
+                const local = readLocalPersonal(guildId, doc.id);
+                if (local?.pendingFirebase) continue;
+                const config = normalizeConfig(guildId, doc.id, doc.data());
+                writeLocalPersonal(guildId, doc.id, { config, pendingFirebase: false });
+                byUser.set(doc.id, config);
+            }
+            recordFirebaseSuccess();
+        } catch (error) {
+            recordFirebaseFailure(error, `list personal Khatmas/${guildId}`);
+        }
+    }
+    return [...byUser.values()].filter(config => !enabledOnly || config.enabled);
 }
 
 export async function getPersonalKhatmaPanel(guildId: string): Promise<PersonalKhatmaPanelConfig | null> {
@@ -138,11 +252,10 @@ export async function acknowledgePersonalKhatmaPage(
     userId: string,
     expectedPage: number,
 ): Promise<{ config: PersonalGuildKhatmaConfig; advanced: boolean; completed: boolean }> {
-    return getDb().runTransaction(async transaction => {
-        const ref = userRef(guildId, userId);
-        const snap = await transaction.get(ref);
-        if (!snap.exists) throw new Error('PERSONAL_KHATMA_NOT_FOUND');
-        const config = normalizeConfig(guildId, userId, snap.data() || {});
+    return withPersonalLock(`${guildId}:${userId}`, async () => {
+        const existing = await getPersonalGuildKhatma(guildId, userId);
+        if (!existing) throw new Error('PERSONAL_KHATMA_NOT_FOUND');
+        const config = normalizeConfig(guildId, userId, existing);
         if (!config.enabled || config.currentPage !== expectedPage || expectedPage > 604) {
             return { config, advanced: false, completed: config.currentPage > 604 };
         }
@@ -158,7 +271,7 @@ export async function acknowledgePersonalKhatmaPage(
             config.completedKhatmas += 1;
             config.lastCompletedAt = config.updatedAt;
         }
-        transaction.set(ref, config);
+        await savePersonalGuildKhatma(config);
         return { config, advanced: true, completed };
     });
 }

@@ -3,7 +3,10 @@ import * as path from 'path';
 import { GuildSettings, GuildAdhkarConfig, GuildAdhanConfig, GuildSalawatConfig, GuildQuranRadioConfig, GuildDonateConfig } from '../types';
 import { logger } from '../utils/logger';
 import { isFirestoreAvailable, getModuleConfig, setModuleConfig, deleteModuleConfig, getAllModuleConfigs } from './guildConfigService';
+import { canAttemptFirebase, getDb, recordFirebaseFailure, recordFirebaseSuccess } from '../config/firebase';
+import { FieldValue } from 'firebase-admin/firestore';
 import type { AdhkarConfigDoc, AdhanConfigDoc, AdhanZone, SalawatConfigDoc, QuranRadioConfigDoc, DonateConfigDoc } from '../types/config';
+import { writeJsonAtomic } from '../utils/localJsonStore';
 
 
 // ─── Paths ────────────────────────────────────────────────────
@@ -37,9 +40,8 @@ function readGuild(guildId: string): GuildSettings | null {
 }
 
 function writeGuild(settings: GuildSettings): void {
-    ensureGuildsDir();
     settings.updatedAt = nowISO();
-    fs.writeFileSync(guildFilePath(settings.guildId), JSON.stringify(settings, null, 2), 'utf-8');
+    writeJsonAtomic(guildFilePath(settings.guildId), settings);
 }
 
 function getOrCreateGuild(guildId: string): GuildSettings {
@@ -461,7 +463,7 @@ function writeGuildData(guildId: string, data: GuildData): void {
         // ignore
     }
     const merged = { ...existing, ...data, updatedAt: nowISO() };
-    fs.writeFileSync(fp, JSON.stringify(merged, null, 2), 'utf-8');
+    writeJsonAtomic(fp, merged);
 }
 
 export function getSendHistory(guildId: string, category: string): string[] {
@@ -544,52 +546,55 @@ export async function saveGuildDonateTracking(
     guildId: string,
     tracking: { firstSent: boolean; lastSentAt: string }
 ): Promise<void> {
-    if (isFirestoreAvailable()) {
-        const { getFirestore, FieldValue } = await import('firebase-admin/firestore');
-        const db = getFirestore();
-        await db.doc(`guilds/${guildId}/donateConfig/default`).set({
-            firstSent: tracking.firstSent,
-            lastSentAt: tracking.lastSentAt,
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-        logger.info(`Donate tracking saved via Firestore for guild ${guildId}`);
-        return;
-    }
-
     const guild = getOrCreateGuild(guildId);
     guild.firstDonateBroadcastSent = tracking.firstSent;
     guild.lastDonateBroadcastAt = tracking.lastSentAt;
     writeGuild(guild);
     logger.info(`Donate tracking saved locally for guild ${guildId}`);
+
+    if (isFirestoreAvailable() && canAttemptFirebase()) {
+        try {
+            await getDb().doc(`guilds/${guildId}/donateConfig/default`).set({
+                firstSent: tracking.firstSent,
+                lastSentAt: tracking.lastSentAt,
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+            recordFirebaseSuccess();
+        } catch (error) {
+            recordFirebaseFailure(error, `save donate tracking/${guildId}`);
+        }
+    }
 }
 
 export async function getGuildDonateTracking(
     guildId: string
 ): Promise<{ firstSent: boolean; lastSentAt?: string; createdAt: Date }> {
-    if (isFirestoreAvailable()) {
-        const { getFirestore } = await import('firebase-admin/firestore');
-        const db = getFirestore();
-        const docSnap = await db.doc(`guilds/${guildId}/donateConfig/default`).get();
-        const guildSnap = await db.doc(`guilds/${guildId}`).get();
-        
-        const data = docSnap.exists ? docSnap.data() : null;
-        const createdAt = guildSnap.exists && guildSnap.createTime 
-            ? guildSnap.createTime.toDate() 
-            : new Date();
-
-        return {
-            firstSent: data?.firstSent || false,
-            lastSentAt: data?.lastSentAt,
-            createdAt,
-        };
-    }
-
     const guild = getOrCreateGuild(guildId);
-    return {
+    const local = {
         firstSent: guild.firstDonateBroadcastSent || false,
         lastSentAt: guild.lastDonateBroadcastAt,
         createdAt: guild.createdAt ? new Date(guild.createdAt) : new Date(),
     };
+    if (!isFirestoreAvailable() || !canAttemptFirebase()) return local;
+    try {
+        const database = getDb();
+        const [docSnap, guildSnap] = await Promise.all([
+            database.doc(`guilds/${guildId}/donateConfig/default`).get(),
+            database.doc(`guilds/${guildId}`).get(),
+        ]);
+        recordFirebaseSuccess();
+        const data = docSnap.exists ? docSnap.data() : null;
+        if (!data) return local;
+        guild.firstDonateBroadcastSent = data.firstSent || false;
+        guild.lastDonateBroadcastAt = data.lastSentAt;
+        writeGuild(guild);
+        return {
+            firstSent: data.firstSent || false,
+            lastSentAt: data.lastSentAt,
+            createdAt: guildSnap.exists && guildSnap.createTime ? guildSnap.createTime.toDate() : local.createdAt,
+        };
+    } catch (error) {
+        recordFirebaseFailure(error, `read donate tracking/${guildId}`);
+        return local;
+    }
 }
-
-

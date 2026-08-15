@@ -2,6 +2,10 @@ node_modules/
 dist/
 /logs/
 /data/.rafiq-primary.lock
+/data/guilds/*.json
+/data/users/
+/data/personal-khatmas/
+/data/global_donate_state.json
 
 .env
 .env.*
