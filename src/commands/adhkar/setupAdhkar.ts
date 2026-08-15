@@ -58,13 +58,13 @@ function mainPayload(session: AdhkarSetupSession) {
     const enabledCount = Object.values(session.categories).filter(status => status === 'enabled').length;
     const pausedCount = Object.values(session.categories).filter(status => status === 'paused').length;
     const embed = new EmbedBuilder().setColor(UI_COLORS.BRAND).setTitle('📿 إعداد الأذكار المتقدمة')
-        .setDescription('اختَر منطقة الأذان المرجعية وقناة الأذكار العامة. أذكار الأذان والوضوء تذهب إلى قناة الأذان الخاصة بالمنطقة، وباقي الأذكار إلى القناة العامة.')
+        .setDescription('اختَر منطقة الأذان المرجعية وقناة الأذكار العامة. أذكار الأذان والوضوء تذهب إلى قناة الأذان الخاصة بالمنطقة، وأذكار الاستيقاظ والنوم وباقي الأذكار إلى القناة العامة.')
         .addFields(
             { name: 'الحالة العامة', value: session.enabled ? '✅ مفعلة' : '⏸️ متوقفة', inline: true },
             { name: 'المنطقة المرجعية', value: zone ? `${zone.city} — ${zone.country} (\`${zone.timezone}\`)` : 'غير محددة', inline: true },
             { name: 'القناة العامة', value: session.generalChannelId ? `<#${session.generalChannelId}>` : 'لم يتم الاختيار', inline: true },
             { name: 'الأنواع', value: `✅ ${enabledCount} مفعلة | ⏸️ ${pausedCount} متوقفة`, inline: false },
-            { name: 'المواعيد الثابتة', value: 'الصباح 06:00 • المساء 18:00 • النوم 22:00\nنهار الجمعة: ذكر واحد من قاعدة الجمعة مباشرة بعد ذكر الصباح، بلا تكرار حتى تكمل 52 ذكراً.\nأذكار الأذان مع كل صلاة، والوضوء بعد 5 دقائق. باقي الأنواع داخل الفواصل النهارية بين الصلوات.', inline: false },
+            { name: 'المواعيد والقنوات', value: 'قناة الأذكار: الصباح 06:00 • المساء 18:00 • الاستيقاظ قبل الفجر بـ30 دقيقة • النوم بعد العشاء بساعة.\nقناة الأذان: أذكار الأذان مع كل صلاة • الوضوء بعد 5 دقائق.\nنهار الجمعة: ذكر واحد من قاعدة الجمعة مباشرة بعد ذكر الصباح، بلا تكرار حتى تكمل 52 ذكراً. باقي الأنواع داخل الفواصل النهارية بين الصلوات.', inline: false },
         )
         .setFooter({ text: 'لا يتم تطبيق أي تغيير قبل الضغط على حفظ.' });
     const zones = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(

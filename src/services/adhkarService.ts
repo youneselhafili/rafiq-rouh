@@ -366,7 +366,13 @@ export async function sendPrayerLinkedAdhkar(client: Client, guildId: string, zo
     else if (kind === 'sleep') type = SLEEP_ADHKAR;
 
     const date = moment().tz(zone.timezone).format('YYYY-MM-DD');
-    await markAndSend(client, guildId, config, `${date}:prayer:${prayer}:${kind}`, zone.channelId, type);
+    // Prayer and wudu adhkar belong beside the adhan notification. Wake-up and
+    // sleep adhkar use prayer times only as their schedule and belong in the
+    // configured general adhkar channel with the other daily adhkar.
+    const channelId = kind === 'wakeup' || kind === 'sleep'
+        ? config.generalChannelId
+        : zone.channelId;
+    await markAndSend(client, guildId, config, `${date}:prayer:${prayer}:${kind}`, channelId, type);
 }
 
 async function runCore(client: Client, guildId: string, type: string) {
