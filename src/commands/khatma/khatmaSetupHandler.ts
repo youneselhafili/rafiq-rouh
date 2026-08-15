@@ -39,18 +39,44 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
 
     if (interaction.isModalSubmit?.()) {
         if (interaction.customId === 'khatma_setup_channel_id_modal') {
-            const channelId = interaction.fields.getTextInputValue('khatma_channel_id').trim().replace(/[<#>]/g, '');
-            if (!/^\d{17,22}$/.test(channelId)) {
-                await interaction.reply({ content: '❌ معرّف القناة غير صالح.', flags: 64 });
+            const channelIds = [
+                {
+                    fieldId: 'khatma_channel_id',
+                    label: 'قناة الختمة الجماعية',
+                    assign: (channelId: string) => { session.channelId = channelId; },
+                },
+                {
+                    fieldId: 'personal_khatma_channel_id',
+                    label: 'قناة الورد الشخصي',
+                    assign: (channelId: string) => { session.personalChannelId = channelId; },
+                },
+            ].map(item => ({
+                ...item,
+                channelId: interaction.fields.getTextInputValue(item.fieldId).trim().replace(/[<#>]/g, ''),
+            })).filter(item => item.channelId);
+
+            if (!channelIds.length) {
+                await interaction.reply({ content: '❌ دخل معرّف قناة واحدة على الأقل.', flags: 64 });
                 return;
             }
-            const channel = await interaction.guild?.channels.fetch(channelId).catch(() => null);
-            if (!channel || channel.guildId !== interaction.guildId ||
-                (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) {
-                await interaction.reply({ content: '❌ القناة غير موجودة أو ليست قناة نصية/إعلانات.', flags: 64 });
-                return;
+
+            const validatedChannels: Array<{ assign: (channelId: string) => void; channelId: string }> = [];
+            for (const item of channelIds) {
+                if (!/^\d{17,22}$/.test(item.channelId)) {
+                    await interaction.reply({ content: `❌ معرّف ${item.label} غير صالح.`, flags: 64 });
+                    return;
+                }
+                const channel = await interaction.guild?.channels.fetch(item.channelId).catch(() => null);
+                if (!channel || channel.guildId !== interaction.guildId ||
+                    (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) {
+                    await interaction.reply({ content: `❌ ${item.label} غير موجودة أو ليست قناة نصية/إعلانات.`, flags: 64 });
+                    return;
+                }
+                validatedChannels.push({ assign: item.assign, channelId: channel.id });
             }
-            session.channelId = channel.id;
+
+            for (const item of validatedChannels) item.assign(item.channelId);
+
             await interaction.update(buildKhatmaSetupPayload(session));
             return;
         }
@@ -144,19 +170,33 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
     }
 
     if (id === 'khatma_setup_channel_id') {
-        const input = new TextInputBuilder()
+        const khatmaInput = new TextInputBuilder()
             .setCustomId('khatma_channel_id')
-            .setLabel('معرّف قناة الختمة')
+            .setLabel('ID قناة الختمة الجماعية')
             .setStyle(TextInputStyle.Short)
-            .setRequired(true)
+            .setRequired(false)
             .setMinLength(17)
             .setMaxLength(22)
             .setPlaceholder('مثال: 123456789012345678');
-        if (session.channelId) input.setValue(session.channelId);
+        if (session.channelId) khatmaInput.setValue(session.channelId);
+
+        const personalInput = new TextInputBuilder()
+            .setCustomId('personal_khatma_channel_id')
+            .setLabel('ID قناة الورد الشخصي')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+            .setMinLength(17)
+            .setMaxLength(22)
+            .setPlaceholder('مثال: 123456789012345678');
+        if (session.personalChannelId) personalInput.setValue(session.personalChannelId);
+
         const modal = new ModalBuilder()
             .setCustomId('khatma_setup_channel_id_modal')
-            .setTitle('اختيار قناة الختمة بالـID')
-            .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+            .setTitle('إدخال ID قنوات الختمة والورد')
+            .addComponents(
+                new ActionRowBuilder<TextInputBuilder>().addComponents(khatmaInput),
+                new ActionRowBuilder<TextInputBuilder>().addComponents(personalInput),
+            );
         await interaction.showModal(modal);
         return;
     }

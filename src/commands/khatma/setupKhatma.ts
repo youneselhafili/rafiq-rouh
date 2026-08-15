@@ -167,7 +167,7 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
         firstRow.addComponents(
             new ButtonBuilder()
                 .setCustomId('khatma_setup_channel_id')
-                .setLabel('إدخال معرّف القناة')
+                .setLabel('إدخال ID القنوات')
                 .setEmoji('🔢')
                 .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
