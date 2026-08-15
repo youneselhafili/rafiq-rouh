@@ -97,34 +97,49 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
         return;
     }
 
+    if (interaction.isChannelSelectMenu?.() && interaction.customId === 'khatma_setup_personal_channel') {
+        session.personalChannelId = interaction.values[0];
+        await interaction.update(buildKhatmaSetupPayload(session));
+        return;
+    }
+
     if (!interaction.isButton?.()) return;
     const id = interaction.customId;
 
     if (id === 'khatma_setup_publish_personal') {
-        if (session.scope !== 'guild' || !session.channelId) {
-            await interaction.reply({ content: '❌ اختر قناة كتابية أولاً، ثم انشر لوحة الورد الشخصي.', flags: 64 });
+        if (session.scope !== 'guild' || !session.personalChannelId) {
+            await interaction.reply({ content: '❌ اختر قناة الورد الشخصي أولاً، ثم انشر اللوحة.', flags: 64 });
             return;
         }
         await interaction.deferReply({ flags: 64 });
-        const channel = await interaction.guild?.channels.fetch(session.channelId).catch(() => null);
+        const channel = await interaction.guild?.channels.fetch(session.personalChannelId).catch(() => null);
         if (!channel || !('send' in channel) || typeof channel.send !== 'function') {
-            await interaction.editReply('❌ تعذر الوصول إلى القناة المختارة أو الإرسال فيها.');
+            await interaction.editReply('❌ تعذر الوصول إلى قناة الورد الشخصي أو الإرسال فيها.');
             return;
         }
         const existingPanel = await getPersonalKhatmaPanel(session.guildId!);
-        const existingMessage = existingPanel?.channelId === session.channelId && existingPanel.messageId
+        const existingMessage = existingPanel?.channelId === session.personalChannelId && existingPanel.messageId
             ? await channel.messages.fetch(existingPanel.messageId).catch(() => null)
             : null;
         const message = existingMessage
             ? await existingMessage.edit(buildPublicPersonalKhatmaPanel())
             : await channel.send(buildPublicPersonalKhatmaPanel());
         await message.pin('لوحة الورد الشخصي للقرآن').catch(() => null);
+
+        if (existingPanel?.messageId && existingPanel.channelId !== session.personalChannelId) {
+            const oldChannel = await interaction.guild?.channels.fetch(existingPanel.channelId).catch(() => null);
+            if (oldChannel && 'messages' in oldChannel) {
+                const oldMessage = await oldChannel.messages.fetch(existingPanel.messageId).catch(() => null);
+                await oldMessage?.delete().catch(() => null);
+            }
+        }
+
         await setPersonalKhatmaPanel(session.guildId!, {
-            channelId: session.channelId,
+            channelId: session.personalChannelId,
             messageId: message.id,
             updatedAt: new Date().toISOString(),
         });
-        await interaction.editReply(`✅ تم نشر لوحة الورد الشخصي في <#${session.channelId}>. يستطيع كل عضو إعداد ختمته وقراءة صفحاته بخصوصية.`);
+        await interaction.editReply(`✅ تم نشر لوحة الورد الشخصي في <#${session.personalChannelId}>. قناة الختمة الجماعية لم تتغير.`);
         return;
     }
 

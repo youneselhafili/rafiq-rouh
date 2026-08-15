@@ -16,6 +16,7 @@ import { KhatmaMode } from '../../types';
 import { UI_COLORS } from '../../utils/uiRenderer';
 import { calculatePagesPerDay, getGuildKhatma } from '../../services/khatmaService';
 import { getUserDMConfig } from '../../services/dmSubscriptionService';
+import { getPersonalKhatmaPanel } from '../../services/personalGuildKhatmaService';
 
 export const MODE_LABELS: Record<KhatmaMode, string> = {
     custom: 'عدد صفحات مخصص',
@@ -31,6 +32,7 @@ export interface KhatmaSetupSession {
     ownerId: string;
     guildId?: string;
     channelId?: string;
+    personalChannelId?: string;
     enabled: boolean;
     mode: KhatmaMode;
     pagesPerDay: number;
@@ -63,12 +65,16 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply({ flags: 64 });
 
     const guildId = interaction.guildId!;
-    const state = await getGuildKhatma(guildId);
+    const [state, personalPanel] = await Promise.all([
+        getGuildKhatma(guildId),
+        getPersonalKhatmaPanel(guildId),
+    ]);
     const session: KhatmaSetupSession = {
         scope: 'guild',
         ownerId: interaction.user.id,
         guildId,
         channelId: state?.channelId,
+        personalChannelId: personalPanel?.channelId,
         enabled: state?.isActive ?? false,
         mode: state?.mode ?? 'month',
         pagesPerDay: state?.pagesPerDay || calculatePagesPerDay(state?.mode ?? 'month'),
@@ -113,7 +119,10 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
             { name: 'الصفحات في اليوم', value: `${session.pagesPerDay}`, inline: true },
             ...(session.mode === 'ramadan' ? [{ name: 'عدد الختمات', value: `${session.ramadanKhatmas}`, inline: true }] : []),
             { name: 'التقدم', value: `${Math.min(session.currentPage, 604)} / 604`, inline: true },
-            ...(session.scope === 'guild' ? [{ name: 'القناة', value: session.channelId ? `<#${session.channelId}>` : '❌ لم يتم اختيار قناة', inline: false }] : []),
+            ...(session.scope === 'guild' ? [
+                { name: 'قناة الختمة الجماعية', value: session.channelId ? `<#${session.channelId}>` : '❌ لم يتم اختيار قناة', inline: false },
+                { name: 'قناة الورد الشخصي', value: session.personalChannelId ? `<#${session.personalChannelId}>` : '❌ لم يتم اختيار قناة', inline: false },
+            ] : []),
             ...(session.restartFromFirstPage ? [{
                 name: '🔄 إعادة التقدم',
                 value: 'تم ضبط التقدم على الصفحة 1. اضغط **حفظ** لإرسال الصفحة الأولى الآن.',
@@ -175,12 +184,22 @@ export function buildKhatmaSetupPayload(session: KhatmaSetupSession) {
         const channelRow = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
             new ChannelSelectMenuBuilder()
                 .setCustomId('khatma_setup_channel')
-                .setPlaceholder('اختر القناة التي تُرسل فيها صفحات الختمة')
+                .setPlaceholder('اختر قناة صفحات الختمة الجماعية')
                 .setMinValues(1)
                 .setMaxValues(1)
                 .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
         );
         components.splice(1, 0, channelRow);
+
+        const personalChannelRow = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
+            new ChannelSelectMenuBuilder()
+                .setCustomId('khatma_setup_personal_channel')
+                .setPlaceholder('اختر القناة المخصصة للورد الشخصي')
+                .setMinValues(1)
+                .setMaxValues(1)
+                .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+        );
+        components.splice(2, 0, personalChannelRow);
     }
 
     const secondRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
