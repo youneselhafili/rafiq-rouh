@@ -89,19 +89,39 @@ function avatarUrl(user: DashboardUser): string {
     return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
 }
 
-function json(response: ServerResponse, status: number, body: unknown, headers: Record<string, string | string[]> = {}): void {
+function corsHeaders(request?: IncomingMessage): Record<string, string> {
+    const origin = String(request?.headers?.origin || '');
+    const allowedOrigins = [
+        'https://rafikk-rouh.web.app',
+        'https://rafikk-rouh.firebaseapp.com',
+        'http://localhost:5173',
+        'http://localhost:3000',
+    ];
+    const allowOrigin = allowedOrigins.includes(origin) ? origin : 'https://rafikk-rouh.web.app';
+    return {
+        'Access-Control-Allow-Origin': allowOrigin,
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE, PUT',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
+        'Vary': 'Origin',
+    };
+}
+
+function json(response: ServerResponse, status: number, body: unknown, headers: Record<string, string | string[]> = {}, request?: IncomingMessage): void {
     response.writeHead(status, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
+        ...corsHeaders(request),
         ...headers,
     });
     response.end(JSON.stringify(body));
 }
 
-function redirect(response: ServerResponse, location: string, headers: Record<string, string | string[]> = {}): void {
-    response.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...headers });
+function redirect(response: ServerResponse, location: string, headers: Record<string, string | string[]> = {}, request?: IncomingMessage): void {
+    response.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...corsHeaders(request), ...headers });
     response.end();
 }
+
 
 async function bodyJson(request: IncomingMessage): Promise<Record<string, any>> {
     return await new Promise((resolve, reject) => {
@@ -182,9 +202,10 @@ async function deleteSession(token: string): Promise<void> {
 
 async function requireSession(request: IncomingMessage, response: ServerResponse): Promise<DashboardSession | null> {
     const session = await readSession(cookieMap(request).rafiq_session || '');
-    if (!session) json(response, 401, { error: 'authentication_required' });
+    if (!session) json(response, 401, { error: 'authentication_required' }, {}, request);
     return session;
 }
+
 
 async function memberFor(guild: Guild, userId: string): Promise<GuildMember | null> {
     return guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
@@ -414,10 +435,16 @@ function staticFile(response: ServerResponse, pathname: string): void {
 
 async function apiRequest(client: Client, request: IncomingMessage, response: ServerResponse, url: URL): Promise<boolean> {
     const method = request.method || 'GET';
-    if (url.pathname === '/api/health') {
-        json(response, 200, { ok: true, discord: client.isReady(), oauthConfigured: Boolean(env('DISCORD_CLIENT_SECRET')), firebase: firestoreAvailable() });
+    if (method === 'OPTIONS') {
+        response.writeHead(204, { ...corsHeaders(request), 'Cache-Control': 'no-store' });
+        response.end();
         return true;
     }
+    if (url.pathname === '/api/health') {
+        json(response, 200, { ok: true, discord: client.isReady(), oauthConfigured: Boolean(env('DISCORD_CLIENT_SECRET')), firebase: firestoreAvailable() }, {}, request);
+        return true;
+    }
+
     if (url.pathname === '/api/auth/discord/start' && method === 'GET') { await handleOAuthStart(response); return true; }
     if (url.pathname === '/auth/callback' && method === 'GET') { await handleOAuthCallback(request, response, url); return true; }
     if (url.pathname === '/api/logout' && method === 'POST') {
