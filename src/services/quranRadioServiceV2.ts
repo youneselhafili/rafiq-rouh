@@ -866,10 +866,13 @@ export async function handleUserLeaveRadioV2(client: Client, member: GuildMember
             return;
         }
         state.userOverride = false;
-        state.queue = [];
-        state.currentTrack = undefined;
-        if (state.twentyFourSeven) await enforceQuran24Cycle(client, state.guildId, true);
-        else {
+        if (state.twentyFourSeven) {
+            // Keep the active session/player alive so a later join continues
+            // the current queue instead of restarting from a new random surah.
+            // The 60s watchdog only intervenes when playback becomes unhealthy.
+        } else {
+            state.queue = [];
+            state.currentTrack = undefined;
             stopGuildPlayback(state.guildId);
             state.mode = 'Idle';
         }
@@ -1223,7 +1226,20 @@ export async function enforceQuran24Cycle(client: Client, guildId: string, force
         quran24StallSince.delete(guildId);
     }
     quran24StallSince.delete(guildId);
+
+    // Continue an already-active, healthy session in this channel instead of
+    // restarting from a new random surah; only spawn a fresh cycle when no
+    // usable session/connection/player exists.
+    const health = getVoicePlaybackHealth(guildId);
+    const usableSession = Boolean(health.active)
+        && (health.channelId as string | undefined) === channel.id
+        && (health.connectionStatus as string | undefined) === 'ready'
+        && ['playing', 'buffering', 'paused'].includes(health.playerStatus as string);
+
     state.controllerId = humans.first()?.id;
+
+    if (usableSession) return;
+
     state.userOverride = false;
     await startRandomQuranKareem(client, state, channel, false);
 }
