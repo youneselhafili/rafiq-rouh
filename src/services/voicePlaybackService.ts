@@ -289,38 +289,32 @@ async function resourceFromUrl(url: string) {
         return { resource: createAudioResource(url) };
     }
 
-    // Attempt 1: Universal FFmpeg Raw PCM stream (s16le 48kHz stereo) with auto-reconnect
-    try {
-        const transcoder = spawnPcmTranscoder(url, 'MP3');
+    // For HLS / Live streams (.m3u8) use FFmpeg
+    if (/\.m3u8($|\?)/i.test(url)) {
+        const ffmpegBin = ffmpegPath || 'ffmpeg';
+        const transcoder = spawn(ffmpegBin, [
+            '-hide_banner', '-loglevel', 'warning',
+            '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
+            '-user_agent', BROWSER_USER_AGENT,
+            '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+            '-i', url,
+            '-vn',
+            '-c:a', 'libopus', '-b:a', '96k', '-f', 'ogg',
+            'pipe:1',
+        ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
 
-        // Verify FFmpeg stays running for 300ms
-        await new Promise<void>((resolve, reject) => {
-            let exited = false;
-            const onExit = (code: number | null) => {
-                exited = true;
-                reject(new Error(`FFmpeg exited early (code ${code})`));
-            };
-            transcoder.once('exit', onExit);
-            setTimeout(() => {
-                transcoder.removeListener('exit', onExit);
-                if (!exited) resolve();
-            }, 300);
-        });
-
-        if (transcoder.stdout && !transcoder.killed) {
+        if (transcoder.stdout) {
             return {
-                resource: createAudioResource(transcoder.stdout, { inputType: StreamType.Raw }),
+                resource: createAudioResource(transcoder.stdout, { inputType: StreamType.OggOpus }),
                 transcoder,
             };
         }
-    } catch (ffmpegErr) {
-        logger.warn(`[Voice] FFmpeg PCM stream unviable for ${url}; attempting Axios stream fallback: ${String(ffmpegErr)}`);
     }
 
-    // Attempt 2: Axios HTTP stream fallback (uses Node.js native TLS stack)
+    // For standard Quran MP3 URLs: direct HTTP stream with native TLS stack
     const response = await axios.get(url, {
         responseType: 'stream',
-        timeout: 20000,
+        timeout: 30000,
         maxRedirects: 5,
         headers: {
             'User-Agent': BROWSER_USER_AGENT,
@@ -330,6 +324,7 @@ async function resourceFromUrl(url: string) {
 
     return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
 }
+
 
 
 
