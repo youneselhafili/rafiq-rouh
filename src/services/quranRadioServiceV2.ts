@@ -98,13 +98,28 @@ function playlistModule(userId: string): string {
 }
 
 async function loadPlaylist(guildId: string, userId: string): Promise<UserPlaylist> {
-    return await getAdvancedConfig<UserPlaylist>(guildId, playlistModule(userId)) || {
+    const globalKey = `global_user_${userId}`;
+    const globalPlaylist = await getAdvancedConfig<UserPlaylist>(globalKey, 'quranPlaylist');
+    if (globalPlaylist && Array.isArray(globalPlaylist.tracks) && globalPlaylist.tracks.length > 0) {
+        return globalPlaylist;
+    }
+
+    const legacy = await getAdvancedConfig<UserPlaylist>(guildId, playlistModule(userId));
+    if (legacy && Array.isArray(legacy.tracks) && legacy.tracks.length > 0) {
+        legacy.updatedAt = new Date().toISOString();
+        await setAdvancedConfig(globalKey, 'quranPlaylist', legacy);
+        return legacy;
+    }
+
+    return {
         tracks: [], position: 0, updatedAt: new Date().toISOString(),
     };
 }
 
 async function savePlaylist(guildId: string, userId: string, playlist: UserPlaylist): Promise<void> {
     playlist.updatedAt = new Date().toISOString();
+    const globalKey = `global_user_${userId}`;
+    await setAdvancedConfig(globalKey, 'quranPlaylist', playlist);
     await setAdvancedConfig(guildId, playlistModule(userId), playlist);
 }
 
@@ -789,16 +804,7 @@ function memberVoice(interaction: any): VoiceBasedChannel | null {
 // startLive function removed
 
 async function startSavedPlaylistPrompt(client: Client, state: QuranRuntimeState, userId: string) {
-    const playlist = await loadPlaylist(state.guildId, userId);
-    if (playlist.tracks.length === 0) return;
-    const channel = await voiceTextChannel(client, state.voiceChannelId);
-    if (!channel) return;
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId('qr_saved_resume').setLabel('كمل من فين وقفتي').setEmoji('▶️').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('qr_saved_restart').setLabel('عاود من البداية').setEmoji('🔄').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('qr_saved_normal').setLabel('تشغيل عادي').setEmoji('🎧').setStyle(ButtonStyle.Secondary),
-    );
-    await sendVoiceChat(channel, { content: `<@${userId}> عندك Playlist محفوظة (${playlist.tracks.length} سورة).`, components: [row] }, true);
+    // Left empty intentionally to protect user privacy and avoid public chat clutter
 }
 
 export async function handleUserJoinRadioV2(client: Client, member: GuildMember, voiceChannel: VoiceBasedChannel) {
@@ -811,7 +817,7 @@ export async function handleUserJoinRadioV2(client: Client, member: GuildMember,
     if (state.controllerId) return;
     state.controllerId = state.controllerOrder[0] || member.id;
     if (isFridayKahfLoopActive(member.guild.id)) {
-        await renderQuranPanel(client, member.guild.id, `\u{1F31F} <@${member.id}> \u0646\u0638\u0627\u0645 \u0627\u0644\u062c\u0645\u0639\u0629 \u0645\u0641\u0639\u0644: \u0633\u0648\u0631\u0629 \u0627\u0644\u0643\u0647\u0641 \u0628\u062c\u0645\u064a\u0639 \u0627\u0644\u0642\u0631\u0627\u0621 \u0645\u0633\u062a\u0645\u0631\u0629 \u062d\u062a\u0649 \u0623\u0630\u0627\u0646 \u0627\u0644\u0638\u0647\u0631.`);
+        await renderQuranPanel(client, member.guild.id, `🌟 <@${member.id}> نظام الجمعة مفعل: سورة الكهف بجميع القراء مستمرة حتى أذان الظهر.`);
         return;
     }
     await renderQuranPanel(
@@ -820,7 +826,6 @@ export async function handleUserJoinRadioV2(client: Client, member: GuildMember,
         `👋 <@${member.id}> أنت المتحكم الآن. اختَر المصدر الذي تريد سماعه.`,
         CONTROLLER_NOTICE_LIFETIME_MS,
     );
-    await startSavedPlaylistPrompt(client, state, member.id);
     await sendAuditLog(client, member.guild.id, {
         level: 'info', system: 'Quran', action: 'Controller assigned', actorId: member.id,
         details: `أول عضو دخل <#${voiceChannel.id}>.`,
@@ -848,7 +853,6 @@ export async function handleUserLeaveRadioV2(client: Client, member: GuildMember
             `🔄 <@${next.id}> انتقل إليك التحكم بعد خروج المتحكم السابق.`,
             CONTROLLER_NOTICE_LIFETIME_MS,
         );
-        await startSavedPlaylistPrompt(client, state, next.id);
         return;
     }
     if (remaining.size === 0) {
@@ -909,14 +913,32 @@ async function playlistView(interaction: any, state: QuranRuntimeState, replace 
 async function playlistDecisionView(interaction: any, state: QuranRuntimeState) {
     const userId = state.controllerId || interaction.user.id;
     const playlist = await loadPlaylist(state.guildId, userId);
+    if (!playlist.tracks.length) {
+        await interaction.followUp({
+            content: '📋 القائمة ديالك خاوية حالياً. تقدر تضيف سور من **القراء المفصلون** أو **المكتبة الصوتية** وغادي يبقاو محفوظين عندك فجميع السيرفرات!',
+            flags: 64,
+        });
+        return;
+    }
     const embed = new EmbedBuilder()
         .setColor(0x5865f2)
-        .setTitle('📋 تنظيم اختياراتك')
+        .setTitle('📋 قائمة القرآن الخاصة بك')
         .setDescription(
-            `عندك حالياً **${playlist.tracks.length}** اختيار محفوظ.\n\n` +
-            'واش بغيتي تجمعهم كاملين فـPlaylist وحدة بنفس الترتيب، ولا تمسح الاختيارات وتبدا من جديد؟',
+            `عندك حالياً **${playlist.tracks.length}** سورة محفوظة فـPlaylist الخاصة بك (محفوظة على حسابك فجميع السيرفرات).\n\n` +
+            `📍 الموقع الحالي: السورة رقم **${(playlist.position || 0) + 1}** من أصل **${playlist.tracks.length}**\n\n` +
+            'اختر العملية التي تريد القيام بها:',
         );
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+            .setCustomId('qr_saved_resume')
+            .setLabel('كمل من فين وقفتي')
+            .setEmoji('▶️')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId('qr_saved_restart')
+            .setLabel('عاود من البداية')
+            .setEmoji('🔄')
+            .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
             .setCustomId('qr_playlist_combine')
             .setLabel('جمع اختياراتي')
