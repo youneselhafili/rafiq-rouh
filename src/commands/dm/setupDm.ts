@@ -23,7 +23,7 @@ export const data = new SlashCommandBuilder()
     .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
     .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel);
 
-function buildDMIntroPayload(includeChannelPicker: boolean, iconURL?: string) {
+export function buildDMIntroPayload(includeChannelPicker: boolean, iconURL?: string) {
     const embed = renderPanelEmbed(
         "رفيق الروح • لوحة الرسائل الخاصة",
         "لوحة خاصة بكل عضو، تخليه يتحكم في التنبيهات التي تصله في الخاص بدون تغيير إعدادات السيرفر. يمكن نشر هذه اللوحة في قناة عامة، وكل عضو يضغط الزر يحصل على إعداداته الخاصة.",

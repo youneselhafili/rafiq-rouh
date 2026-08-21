@@ -20,6 +20,7 @@ import {
 import { getUserDMConfig, updateUserDMConfig, UserDMConfig } from './dmSubscriptionService';
 import { getModuleConfig, setModuleConfig } from './guildConfigService';
 import { logger } from '../utils/logger';
+import { buildDMIntroPayload } from '../commands/dm/setupDm';
 
 interface OAuthGuild {
     id: string;
@@ -49,6 +50,7 @@ interface ServerConfig extends Record<string, unknown> {
     quranChannelId?: string;
     logsChannelId?: string;
     rolePanelChannelId?: string;
+    dmPanelChannelId?: string;
 }
 
 const memorySessions = new Map<string, DashboardSession>();
@@ -461,7 +463,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         return true;
     }
 
-    const match = url.pathname.match(/^\/api\/guilds\/(\d+)(?:\/(config|channels|roles|test-message))?$/);
+    const match = url.pathname.match(/^\/api\/guilds\/(\d+)(?:\/(config|channels|roles|test-message|publish-dm))?$/);
     if (!match) { json(response, 404, { error: 'not_found' }); return true; }
     const [, guildId, resource = 'config'] = match;
     const guild = await authorizedGuild(client, session, guildId);
@@ -469,14 +471,37 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
 
     if (resource === 'channels' && method === 'GET') { json(response, 200, { channels: await listChannels(guild) }); return true; }
     if (resource === 'roles' && method === 'GET') { json(response, 200, { roles: await listRoles(guild) }); return true; }
-    if (resource === 'config' && method === 'GET') { json(response, 200, { config: await getModuleConfig<ServerConfig>(guild.id, 'serverConfig') || {} }); return true; }
+    if (resource === 'config' && method === 'GET') {
+        const config = await getModuleConfig<ServerConfig>(guild.id, 'serverConfig') || {};
+        const roles = await getModuleConfig<any>(guild.id, 'roles') || {};
+        json(response, 200, { config, roles });
+        return true;
+    }
     if (resource === 'config' && method === 'PUT') {
-        const next = await bodyJson(request) as ServerConfig;
-        const allowed = ['dashboardAdminRoleId','adhanChannelId','adhkarChannelId','quranChannelId','logsChannelId','rolePanelChannelId'];
-        const clean: ServerConfig = {};
-        for (const key of allowed) if (typeof next[key] === 'string') clean[key] = next[key];
-        await setModuleConfig(guild.id, 'serverConfig', clean);
-        json(response, 200, { ok: true, config: clean });
+        const body = await bodyJson(request) as any;
+        let configToSave = body.config;
+        let rolesToSave = body.roles;
+        
+        // Backward compatibility for flat objects
+        if (!body.config && !body.roles) {
+            configToSave = body;
+        }
+        
+        if (configToSave) {
+            const allowed = ['dashboardAdminRoleId','adhanChannelId','adhkarChannelId','quranChannelId','logsChannelId','rolePanelChannelId','dmPanelChannelId'];
+            const clean: ServerConfig = {};
+            for (const key of allowed) if (typeof configToSave[key] === 'string') clean[key] = configToSave[key];
+            await setModuleConfig(guild.id, 'serverConfig', clean);
+        }
+        
+        if (rolesToSave) {
+            const allowedRoles = ['adhkarRoleId','salawatRoleId','jumuahRoleId','adhanRoleId','khatmaRoleId'];
+            const cleanRoles: any = {};
+            for (const key of allowedRoles) if (typeof rolesToSave[key] === 'string') cleanRoles[key] = rolesToSave[key];
+            await setModuleConfig(guild.id, 'roles', cleanRoles);
+        }
+        
+        json(response, 200, { ok: true });
         return true;
     }
     if (resource === 'test-message' && method === 'POST') {
@@ -485,6 +510,25 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         if (!channel?.isTextBased() || channel.isDMBased() || !('send' in channel)) { json(response, 400, { error: 'invalid_channel' }); return true; }
         await channel.send({ embeds: [new EmbedBuilder().setColor('#52C99A').setTitle('رفيق الروح').setDescription('وصلت رسالة اختبار لوحة التحكم بنجاح.').setTimestamp()] });
         json(response, 200, { ok: true });
+        return true;
+    }
+    if (resource === 'publish-dm' && method === 'POST') {
+        const body = await bodyJson(request);
+        const channelId = String(body.channelId || '').trim();
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
+        if (!channel || !('send' in channel) || typeof channel.send !== 'function') {
+            json(response, 400, { error: 'invalid_channel', message: 'Channel is not accessible or not a text channel.' });
+            return true;
+        }
+        const iconURL = client.user?.displayAvatarURL({ extension: 'png', size: 128 });
+        await channel.send(buildDMIntroPayload(false, iconURL));
+        
+        // Save to config
+        const config = await getModuleConfig<ServerConfig>(guild.id, 'serverConfig') || {};
+        config.dmPanelChannelId = channelId;
+        await setModuleConfig(guild.id, 'serverConfig', config);
+        
+        json(response, 200, { ok: true, config });
         return true;
     }
     json(response, 405, { error: 'method_not_allowed' });

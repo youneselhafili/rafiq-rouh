@@ -14,6 +14,7 @@ import { VoiceBasedChannel } from 'discord.js';
 // Removed LIVE_MAKKAH_URL and LIVE_MADINA_URL
 import { logger } from '../utils/logger';
 import { getReciterByName, getReciterById, getRadioWithLive, getRadioById, searchReciters, getReciters, buildSurahUrls } from './contentService';
+import { isBlacklisted, addToBlacklist } from './blacklistService';
 
 export { Moshaf, Reciter, RadioStation } from '../types';
 
@@ -130,12 +131,22 @@ export async function streamSurahs(
             if (currentIndex >= urls.length) currentIndex = 0;
 
             const url = urls[currentIndex];
-            logger.info(`🎵 Validating surah ${currentIndex + 1}/${urls.length}: ${url}`);
+
+            // Skip blacklisted URLs immediately.
+            if (isBlacklisted(url)) {
+                logger.warn(`[Quran] Skipping blacklisted URL: ${url}`);
+                currentIndex++;
+                attempts++;
+                continue;
+            }
+
+            logger.info(`🎥 Validating surah ${currentIndex + 1}/${urls.length}: ${url}`);
 
             const isValid = await validateUrl(url);
             if (isValid) break;
 
             logger.warn(`⏭️ Skipping invalid URL: ${url}`);
+            addToBlacklist(url, 'فشل التحقق من الرابط خلال قراءة سورة الكهف');
             currentIndex++;
             attempts++;
         }
@@ -148,7 +159,11 @@ export async function streamSurahs(
 
         try {
             const url = urls[currentIndex];
-            const response = await axios.get(url, { responseType: 'stream' });
+            const response = await axios.get(url, {
+                responseType: 'stream',
+                timeout: 15000,
+                headers: { 'User-Agent': 'Rafiq-Rouh/0.1 Quran audio player' },
+            });
             const resource = createAudioResource(response.data, {
                 inputType: StreamType.Arbitrary,
                 inlineVolume: false,
@@ -161,6 +176,12 @@ export async function streamSurahs(
         } catch (error) {
             logger.error(`Error playing surah ${currentIndex + 1}:`, error);
             consecutiveErrors++;
+            // Blacklist the URL after 3 consecutive errors.
+            if (consecutiveErrors >= 3) {
+                const url = urls[currentIndex];
+                addToBlacklist(url, `فشل تشغيل سورة 3 مرات متتالية`);
+                logger.warn(`[Quran] Blacklisted URL after 3 errors: ${url}`);
+            }
             if (consecutiveErrors > 3) {
                 logger.error('Too many consecutive errors. Stopping.');
                 stopAudio(guildId);

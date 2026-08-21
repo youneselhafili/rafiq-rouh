@@ -13,6 +13,8 @@ import { acquirePrimaryRuntime } from '../services/runtimeLeadershipService';
 import { initDonateScheduler } from '../services/donateSchedulerService';
 import { buildApplicationDescription, getBotCatalogStats } from '../services/botInfoService';
 import { warmLocalStorageMirror } from '../services/storageWarmupService';
+import { initBlacklistRetryScheduler } from '../services/blacklistService';
+
 
 export const name = Events.ClientReady;
 export const once = true;
@@ -79,5 +81,6 @@ export async function execute(client: ExtendedClient) {
     initPersonalDMScheduler(client);
     startKhatmaCron(client);
     initDonateScheduler(client);
+    initBlacklistRetryScheduler(client);
     logger.success('Background jobs initialized.');
 }

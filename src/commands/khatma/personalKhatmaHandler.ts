@@ -51,6 +51,249 @@ interface PersonalSetupSession {
 const setupSessions = new Map<string, PersonalSetupSession>();
 const sessionKey = (guildId: string, userId: string) => `${guildId}:${userId}`;
 
+interface SurahItem {
+    name: string;
+    start: number;
+    end: number;
+}
+
+const SURAHS: SurahItem[] = [
+    { name: '1. الفاتحة', start: 1, end: 1 },
+    { name: '2. البقرة', start: 2, end: 49 },
+    { name: '3. آل عمران', start: 50, end: 76 },
+    { name: '4. النساء', start: 77, end: 106 },
+    { name: '5. المائدة', start: 106, end: 127 },
+    { name: '6. الأنعام', start: 128, end: 150 },
+    { name: '7. الأعراف', start: 151, end: 176 },
+    { name: '8. الأنفال', start: 177, end: 186 },
+    { name: '9. التوبة', start: 187, end: 207 },
+    { name: '10. يونس', start: 208, end: 221 },
+    { name: '11. هود', start: 221, end: 235 },
+    { name: '12. يوسف', start: 235, end: 248 },
+    { name: '13. الرعد', start: 249, end: 255 },
+    { name: '14. إبراهيم', start: 255, end: 261 },
+    { name: '15. الحجر', start: 262, end: 267 },
+    { name: '16. النحل', start: 267, end: 281 },
+    { name: '17. الإسراء', start: 282, end: 293 },
+    { name: '18. الكهف', start: 293, end: 304 },
+    { name: '19. مريم', start: 305, end: 312 },
+    { name: '20. طه', start: 312, end: 321 },
+    { name: '21. الأنبياء', start: 322, end: 331 },
+    { name: '22. الحج', start: 332, end: 341 },
+    { name: '23. المؤمنون', start: 342, end: 349 },
+    { name: '24. النور', start: 350, end: 359 },
+    { name: '25. الفرقان', start: 359, end: 366 },
+    { name: '26. الشعراء', start: 367, end: 376 },
+    { name: '27. النمل', start: 377, end: 385 },
+    { name: '28. القصص', start: 385, end: 396 },
+    { name: '29. العنكبوت', start: 396, end: 404 },
+    { name: '30. الروم', start: 404, end: 410 },
+    { name: '31. لقمان', start: 411, end: 414 },
+    { name: '32. السجدة', start: 415, end: 417 },
+    { name: '33. الأحزاب', start: 418, end: 427 },
+    { name: '34. سبأ', start: 428, end: 434 },
+    { name: '35. فاطر', start: 434, end: 440 },
+    { name: '36. يس', start: 440, end: 445 },
+    { name: '37. الصافات', start: 446, end: 452 },
+    { name: '38. ص', start: 453, end: 458 },
+    { name: '39. الزمر', start: 458, end: 467 },
+    { name: '40. غافر', start: 467, end: 476 },
+    { name: '41. فصلت', start: 477, end: 482 },
+    { name: '42. الشورى', start: 483, end: 489 },
+    { name: '43. الزخرف', start: 489, end: 495 },
+    { name: '44. الدخان', start: 496, end: 498 },
+    { name: '45. الجاثية', start: 499, end: 502 },
+    { name: '46. الأحقاف', start: 502, end: 506 },
+    { name: '47. محمد', start: 507, end: 510 },
+    { name: '48. الفتح', start: 511, end: 515 },
+    { name: '49. الحجرات', start: 515, end: 517 },
+    { name: '50. ق', start: 518, end: 520 },
+    { name: '51. الذاريات', start: 520, end: 523 },
+    { name: '52. الطور', start: 523, end: 525 },
+    { name: '53. النجم', start: 526, end: 528 },
+    { name: '54. القمر', start: 528, end: 531 },
+    { name: '55. الرحمن', start: 531, end: 534 },
+    { name: '56. الواقعة', start: 534, end: 537 },
+    { name: '57. الحديد', start: 537, end: 541 },
+    { name: '58. المجادلة', start: 542, end: 545 },
+    { name: '59. الحشر', start: 545, end: 548 },
+    { name: '60. الممتحنة', start: 549, end: 551 },
+    { name: '61. الصف', start: 551, end: 552 },
+    { name: '62. الجمعة', start: 553, end: 554 },
+    { name: '63. المنافقون', start: 554, end: 555 },
+    { name: '64. التغابن', start: 556, end: 557 },
+    { name: '65. الطلاق', start: 558, end: 559 },
+    { name: '66. التحريم', start: 560, end: 561 },
+    { name: '67. الملك', start: 562, end: 564 },
+    { name: '68. القلم', start: 564, end: 566 },
+    { name: '69. الحاقة', start: 566, end: 568 },
+    { name: '70. المعارج', start: 568, end: 570 },
+    { name: '71. نوح', start: 570, end: 571 },
+    { name: '72. الجن', start: 572, end: 573 },
+    { name: '73. المزمل', start: 574, end: 575 },
+    { name: '74. المدثر', start: 575, end: 577 },
+    { name: '75. القيامة', start: 577, end: 578 },
+    { name: '76. الإنسان', start: 578, end: 580 },
+    { name: '77. المرسلات', start: 580, end: 581 },
+    { name: '78. النبأ', start: 582, end: 583 },
+    { name: '79. النازعات', start: 583, end: 584 },
+    { name: '80. عبس', start: 585, end: 585 },
+    { name: '81. التكوير', start: 586, end: 586 },
+    { name: '82. الانفطار', start: 587, end: 587 },
+    { name: '83. المطففين', start: 587, end: 589 },
+    { name: '84. الانشقاق', start: 589, end: 590 },
+    { name: '85. البروج', start: 590, end: 591 },
+    { name: '86. الطارق', start: 591, end: 592 },
+    { name: '87. الأعلى', start: 592, end: 592 },
+    { name: '88. الغاشية', start: 592, end: 593 },
+    { name: '89. الفجر', start: 593, end: 594 },
+    { name: '90. البلد', start: 594, end: 595 },
+    { name: '91. الشمس', start: 595, end: 595 },
+    { name: '92. الليل', start: 595, end: 596 },
+    { name: '93. الضحى', start: 596, end: 596 },
+    { name: '94. الشرح', start: 596, end: 596 },
+    { name: '95. التين', start: 597, end: 597 },
+    { name: '96. العلق', start: 597, end: 597 },
+    { name: '97. القدر', start: 598, end: 598 },
+    { name: '98. البينة', start: 598, end: 599 },
+    { name: '99. الزلزلة', start: 599, end: 599 },
+    { name: '100. العاديات', start: 599, end: 600 },
+    { name: '101. القارعة', start: 600, end: 600 },
+    { name: '102. التكاثر', start: 600, end: 600 },
+    { name: '103. العصر', start: 601, end: 601 },
+    { name: '104. الهمزة', start: 601, end: 601 },
+    { name: '105. الفيل', start: 601, end: 601 },
+    { name: '106. قريش', start: 602, end: 602 },
+    { name: '107. الماعون', start: 602, end: 602 },
+    { name: '108. الكوثر', start: 602, end: 602 },
+    { name: '109. الكافرون', start: 603, end: 603 },
+    { name: '110. النصر', start: 603, end: 603 },
+    { name: '111. المسد', start: 603, end: 603 },
+    { name: '112. الإخلاص', start: 604, end: 604 },
+    { name: '113. الفلق', start: 604, end: 604 },
+    { name: '114. الناس', start: 604, end: 604 },
+];
+
+function customSurahPagePayload(page: number, startPage: number, endPage: number, surahName: string) {
+    const filename = `quran_page_${page}.jpg`;
+    const surahPageNum = page - startPage + 1;
+    const totalSurahPages = endPage - startPage + 1;
+
+    const embed = new EmbedBuilder()
+        .setColor(0x7c3aed)
+        .setTitle(`📖 ${surahName} - الصفحة ${page} (صفحة ${surahPageNum} من ${totalSurahPages})`)
+        .setDescription('قراءة اختيارية خاصة لا تؤثر على تقدم وردك اليومي.')
+        .setImage(`attachment://${filename}`)
+        .setFooter({ text: 'تصفح الصفحات باستخدام الأزرار أدناه.' });
+
+    const row = new ActionRowBuilder<ButtonBuilder>();
+
+    if (page > startPage) {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`personal_khatma_view_page_${page - 1}_${startPage}_${endPage}_${surahName}`)
+                .setLabel('الصفحة السابقة')
+                .setEmoji('◀️')
+                .setStyle(ButtonStyle.Primary)
+        );
+    }
+
+    if (page < endPage) {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`personal_khatma_view_page_${page + 1}_${startPage}_${endPage}_${surahName}`)
+                .setLabel('الصفحة التالية')
+                .setEmoji('▶️')
+                .setStyle(ButtonStyle.Primary)
+        );
+    }
+
+    row.addComponents(
+        new ButtonBuilder()
+            .setCustomId('personal_khatma_view_stop')
+            .setLabel('توقف')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return {
+        embeds: [embed],
+        files: [new AttachmentBuilder(`${QURAN_PAGE_IMAGE_BASE_URL}/${page}.jpg`, { name: filename })],
+        attachments: [],
+        components: [row],
+    };
+}
+
+async function startCustomSurahReading(interaction: PersonalInteraction, startPage: number, endPage: number, surahName: string) {
+    if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ flags: 64 });
+    }
+    const payload = customSurahPagePayload(startPage, startPage, endPage, surahName);
+    await interaction.editReply(payload);
+}
+
+async function updateCustomSurahReading(interaction: PersonalInteraction, page: number, startPage: number, endPage: number, surahName: string) {
+    await interaction.deferUpdate();
+    const payload = customSurahPagePayload(page, startPage, endPage, surahName);
+    await interaction.editReply(payload);
+}
+
+async function sendSurahSelectionMenu(interaction: PersonalInteraction) {
+    if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ flags: 64 });
+    }
+
+    const selectMenu1 = new StringSelectMenuBuilder()
+        .setCustomId('personal_khatma_select_surah_1')
+        .setPlaceholder('📖 السور 1 - 23 (الفاتحة - المؤمنون)')
+        .addOptions(SURAHS.slice(0, 23).map(s => ({
+            label: s.name,
+            value: `${s.start}_${s.end}_${s.name.split('. ')[1]}`,
+        })));
+
+    const selectMenu2 = new StringSelectMenuBuilder()
+        .setCustomId('personal_khatma_select_surah_2')
+        .setPlaceholder('📖 السور 24 - 46 (النور - الأحقاف)')
+        .addOptions(SURAHS.slice(23, 46).map(s => ({
+            label: s.name,
+            value: `${s.start}_${s.end}_${s.name.split('. ')[1]}`,
+        })));
+
+    const selectMenu3 = new StringSelectMenuBuilder()
+        .setCustomId('personal_khatma_select_surah_3')
+        .setPlaceholder('📖 السور 47 - 69 (محمد - الحاقة)')
+        .addOptions(SURAHS.slice(46, 69).map(s => ({
+            label: s.name,
+            value: `${s.start}_${s.end}_${s.name.split('. ')[1]}`,
+        })));
+
+    const selectMenu4 = new StringSelectMenuBuilder()
+        .setCustomId('personal_khatma_select_surah_4')
+        .setPlaceholder('📖 السور 70 - 92 (المعارج - الليل)')
+        .addOptions(SURAHS.slice(69, 92).map(s => ({
+            label: s.name,
+            value: `${s.start}_${s.end}_${s.name.split('. ')[1]}`,
+        })));
+
+    const selectMenu5 = new StringSelectMenuBuilder()
+        .setCustomId('personal_khatma_select_surah_5')
+        .setPlaceholder('📖 السور 93 - 114 (الضحى - الناس)')
+        .addOptions(SURAHS.slice(92, 114).map(s => ({
+            label: s.name,
+            value: `${s.start}_${s.end}_${s.name.split('. ')[1]}`,
+        })));
+
+    const row1 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu1);
+    const row2 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu2);
+    const row3 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu3);
+    const row4 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu4);
+    const row5 = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu5);
+
+    await interaction.editReply({
+        content: 'اختر السورة التي ترغب في قراءتها من القوائم أدناه (لن تُحتسب القراءة من وردك اليومي):',
+        components: [row1, row2, row3, row4, row5],
+    });
+}
+
 export function buildPublicPersonalKhatmaPanel() {
     const embed = new EmbedBuilder()
         .setColor(0x7c3aed)
@@ -67,6 +310,7 @@ export function buildPublicPersonalKhatmaPanel() {
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId('personal_khatma_config').setLabel('إعداد ختمتي').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('personal_khatma_read').setLabel('استلم ورد اليوم').setEmoji('📖').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('personal_khatma_choose_surah').setLabel('قراءة سورة').setEmoji('📖').setStyle(ButtonStyle.Secondary),
     );
     return { embeds: [embed], components: [row] };
 }
@@ -239,6 +483,36 @@ async function startReading(interaction: PersonalInteraction, extra = false) {
 
 export async function handlePersonalKhatmaInteraction(interaction: PersonalInteraction) {
     const id = interaction.customId;
+    if (id === 'personal_khatma_read_kahf') {
+        return startCustomSurahReading(interaction, 293, 304, 'سورة الكهف');
+    }
+    if (id === 'personal_khatma_choose_surah') {
+        return sendSurahSelectionMenu(interaction);
+    }
+    if (id.startsWith('personal_khatma_select_surah')) {
+        if (!interaction.isStringSelectMenu()) return;
+        const [startPage, endPage, surahName] = interaction.values[0].split('_');
+        return startCustomSurahReading(interaction, Number(startPage), Number(endPage), surahName);
+    }
+    const viewPageMatch = id.match(/^personal_khatma_view_page_(\d+)_(\d+)_(\d+)_(.+)$/);
+    if (viewPageMatch) {
+        const page = Number(viewPageMatch[1]);
+        const startPage = Number(viewPageMatch[2]);
+        const endPage = Number(viewPageMatch[3]);
+        const surahName = viewPageMatch[4];
+        return updateCustomSurahReading(interaction, page, startPage, endPage, surahName);
+    }
+    if (id === 'personal_khatma_view_stop') {
+        await (interaction as any).update({
+            content: '✅ تقبل الله منك صالح الأعمال.',
+            embeds: [],
+            components: [],
+            files: [],
+            attachments: [],
+        });
+        return;
+    }
+
     if (id === 'personal_khatma_config') return openSetup(interaction);
     if (id === 'personal_khatma_read') return startReading(interaction);
     if (id === 'personal_khatma_continue_extra') return startReading(interaction, true);

@@ -1,4 +1,4 @@
-import { AttachmentBuilder, ChannelType, Client, ColorResolvable, EmbedBuilder } from 'discord.js';
+import { AttachmentBuilder, ChannelType, Client, ColorResolvable, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getAdvancedConfig, setAdvancedConfig } from './advancedConfigService';
 import { logger } from '../utils/logger';
 
@@ -114,6 +114,8 @@ const ACTION_LABELS: Record<string, string> = {
     'Live full adhan test': 'اكتمل اختبار الأذان الصوتي الكامل',
     'Catalog rebuilt after explicit confirmation': 'تمت إعادة بناء فهارس المحتوى بعد التأكيد',
     'Full diagnostic report downloaded': 'تم تنزيل تقرير التشخيص الكامل',
+    'Audio link blacklisted': 'تم حظر الرابط الصوتي لكونه معطلاً',
+    'Audio link error': 'حدث خطأ أثناء محاولة تشغيل رابط صوتي',
 };
 
 const COMMAND_LABELS: Record<string, string> = {
@@ -263,6 +265,18 @@ export function buildAuditEmbed(event: AuditEvent): EmbedBuilder {
     return embed;
 }
 
+export function buildAuditComponents(event: AuditEvent): ActionRowBuilder<ButtonBuilder>[] {
+    const isLinkError = event.action === 'Audio link blacklisted' || event.action === 'Audio link error';
+    if (!isLinkError) return [];
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+            .setCustomId('blacklist_manage')
+            .setLabel('📋 إدارة الروابط المعطلة')
+            .setStyle(ButtonStyle.Danger),
+    );
+    return [row];
+}
+
 async function notifyOwner(client: Client, guildId: string, event: AuditEvent, config: LogsConfig): Promise<void> {
     if (!config.dmAlerts || event.level !== 'error') return;
     try {
@@ -305,7 +319,9 @@ export async function sendAuditLog(client: Client, guildId: string, input: Omit<
             config.buffer = [];
             config.droppedEvents = 0;
         }
-        await channel.send({ embeds: [buildAuditEmbed(event)] });
+        const components = buildAuditComponents(event);
+        await channel.send({ embeds: [buildAuditEmbed(event)], ...(components.length ? { components } : {}) });
+
         config.eventCount += 1;
         config.lastLogAt = event.at;
         config.lastError = undefined;

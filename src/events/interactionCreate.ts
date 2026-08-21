@@ -9,6 +9,7 @@ import { handleAdhkarSetupInteraction } from '../commands/adhkar/adhkarSetupHand
 import { handleMyZoneInteraction } from '../commands/adhan/myZoneHandler';
 import { handleTestInteraction } from '../commands/test/testHandler';
 import { handleLogsSetupInteraction } from '../commands/logs/logsSetupHandler';
+import { handleBlacklistInteraction } from '../commands/blacklist/blacklistHandler';
 import { handleJumuahSetupInteraction } from '../commands/jumuah/jumuahSetupHandler';
 import { handleKhatmaSetupInteraction } from '../commands/khatma/khatmaSetupHandler';
 import { sendAuditLog } from '../services/auditLogService';
@@ -191,6 +192,11 @@ export async function execute(interaction: Interaction) {
             if (interaction.customId === 'donate_copy_rib') {
                 const { handleButton: handleDonateButton } = await import('../commands/info/donate');
                 await handleDonateButton(interaction as any);
+                return;
+            }
+
+            if (interaction.customId.startsWith('blacklist_')) {
+                await handleBlacklistInteraction(interaction as any);
                 return;
             }
 

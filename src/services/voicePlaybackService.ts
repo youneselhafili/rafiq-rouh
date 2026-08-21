@@ -5,8 +5,10 @@ import {
     AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, entersState,
     joinVoiceChannel, StreamType, VoiceConnection, VoiceConnectionStatus,
 } from '@discordjs/voice';
-import { PermissionFlagsBits, Routes, VoiceBasedChannel } from 'discord.js';
+import { Client, PermissionFlagsBits, Routes, VoiceBasedChannel } from 'discord.js';
 import { logger } from '../utils/logger';
+import { isBlacklisted, addToBlacklist } from './blacklistService';
+import { sendAuditLog } from './auditLogService';
 
 export interface VoiceTrack {
     url: string;
@@ -298,7 +300,7 @@ async function resourceFromUrl(url: string) {
         // zero timeout allows long recitations to finish normally.
         const response = await axios.get(url, {
             responseType: 'stream',
-            timeout: 0,
+            timeout: 15000,
             maxRedirects: 5,
             headers: { 'User-Agent': 'Rafiq-Rouh/0.1 Quran audio player' },
         });
@@ -383,6 +385,17 @@ export async function playTrackQueue(
             return;
         }
         const track = session.tracks![session.index];
+
+        // Skip blacklisted URLs immediately without retrying.
+        if (isBlacklisted(track.url)) {
+            logger.warn(`[Voice] Skipping blacklisted URL: ${track.url}`);
+            session.index += 1;
+            announcedIndex = -1;
+            resetRetries();
+            setTimeout(playIndex, 500);
+            return;
+        }
+
         try {
             const prepared = await resourceFromUrl(track.url);
             stopTranscoder(session);
@@ -394,6 +407,17 @@ export async function playTrackQueue(
             if (registerFailure() <= 2) {
                 setTimeout(playIndex, 3_000);
                 return;
+            }
+            // Blacklist the URL after 3 consecutive failures.
+            addToBlacklist(track.url, `فشل الاتصال 3 مرات متتالية — ${track.title}`);
+            const client: Client | undefined = (global as any).discordClient;
+            if (client && session.channel.guild.id) {
+                sendAuditLog(client, session.channel.guild.id, {
+                    system: 'quran',
+                    action: 'Audio link blacklisted',
+                    level: 'error',
+                    details: `تم حظر الرابط تلقائياً بعد 3 محاولات فاشلة:\n\`${track.url}\`\nالسبب: ${error instanceof Error ? error.message : String(error)}`,
+                }).catch(e => logger.warn(`[Voice] Could not send blacklist audit log: ${String(e)}`));
             }
             session.index += 1;
             announcedIndex = -1;

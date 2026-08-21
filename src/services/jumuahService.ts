@@ -1,4 +1,4 @@
-﻿import * as cron from 'node-cron';
+import * as cron from 'node-cron';
 import moment from 'moment-timezone';
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client,
@@ -181,10 +181,10 @@ async function executeJumuah(client: Client, guildId: string, config: JumuahV2Co
         if (!channel?.isTextBased() || !('send' in channel)) throw new Error(`Adhkar text channel ${channelId} is unavailable.`);
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
-                .setStyle(ButtonStyle.Link)
+                .setCustomId('personal_khatma_read_kahf')
+                .setStyle(ButtonStyle.Primary)
                 .setLabel('\u0642\u0631\u0627\u0621\u0629 \u0633\u0648\u0631\u0629 \u0627\u0644\u0643\u0647\u0641')
-                .setEmoji('\u{1F4D6}')
-                .setURL('https://quran.com/18'),
+                .setEmoji('\u{1F4D6}'),
         );
         const rolesConfig = await getRolesConfig(guildId);
         const content = rolesConfig.jumuahRoleId ? `<@&${rolesConfig.jumuahRoleId}>\n` : '@everyone\n';
