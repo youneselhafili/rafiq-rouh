@@ -74,19 +74,9 @@ function cookieMap(request: IncomingMessage): Record<string, string> {
 }
 
 function cookie(name: string, value: string, options: { maxAge?: number; clear?: boolean } = {}): string {
+    const secure = env('NODE_ENV') === 'production' ? '; Secure' : '';
     const maxAge = options.clear ? '; Max-Age=0' : options.maxAge ? `; Max-Age=${options.maxAge}` : '';
-    return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=None; Secure${maxAge}`;
-}
-
-function getCorsHeaders(request?: IncomingMessage): Record<string, string> {
-    const origin = request?.headers?.origin || 'https://rafikk-rouh.web.app';
-    return {
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, X-Requested-With',
-        'Access-Control-Max-Age': '86400',
-    };
+    return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax${secure}${maxAge}`;
 }
 
 function sessionKey(token: string): string {
@@ -99,17 +89,14 @@ function avatarUrl(user: DashboardUser): string {
     return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
 }
 
-function json(response: ServerResponse, status: number, body: unknown, headers: Record<string, string | string[]> = {}, request?: IncomingMessage): void {
-    const cors = getCorsHeaders(request);
+function json(response: ServerResponse, status: number, body: unknown, headers: Record<string, string | string[]> = {}): void {
     response.writeHead(status, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
-        ...cors,
         ...headers,
     });
     response.end(JSON.stringify(body));
 }
-
 
 function redirect(response: ServerResponse, location: string, headers: Record<string, string | string[]> = {}): void {
     response.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...headers });
@@ -427,16 +414,10 @@ function staticFile(response: ServerResponse, pathname: string): void {
 
 async function apiRequest(client: Client, request: IncomingMessage, response: ServerResponse, url: URL): Promise<boolean> {
     const method = request.method || 'GET';
-    if (method === 'OPTIONS') {
-        response.writeHead(204, getCorsHeaders(request));
-        response.end();
-        return true;
-    }
     if (url.pathname === '/api/health') {
-        json(response, 200, { ok: true, discord: client.isReady(), oauthConfigured: Boolean(env('DISCORD_CLIENT_SECRET')), firebase: firestoreAvailable() }, {}, request);
+        json(response, 200, { ok: true, discord: client.isReady(), oauthConfigured: Boolean(env('DISCORD_CLIENT_SECRET')), firebase: firestoreAvailable() });
         return true;
     }
-
     if (url.pathname === '/api/auth/discord/start' && method === 'GET') { await handleOAuthStart(response); return true; }
     if (url.pathname === '/auth/callback' && method === 'GET') { await handleOAuthCallback(request, response, url); return true; }
     if (url.pathname === '/api/logout' && method === 'POST') {
