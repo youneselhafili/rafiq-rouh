@@ -255,18 +255,20 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
 
 const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
-function spawnOggTranscoder(url: string, label: string): ChildProcess {
-    if (!ffmpegPath) throw new Error('FFmpeg executable is unavailable for remote playback.');
-    const transcoder = spawn(ffmpegPath, [
+function spawnPcmTranscoder(url: string, label: string): ChildProcess {
+    const ffmpegBin = ffmpegPath || 'ffmpeg';
+    const transcoder = spawn(ffmpegBin, [
         '-hide_banner', '-loglevel', 'warning',
         '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
         '-user_agent', BROWSER_USER_AGENT,
         '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
         '-reconnect_on_network_error', '1',
-        '-i', url, '-map', '0:a:0', '-vn',
-        '-c:a', 'libopus', '-ar', '48000', '-ac', '2', '-b:a', '96k', '-vbr', 'on', '-application', 'audio',
-        '-f', 'ogg', 'pipe:1',
+        '-i', url,
+        '-vn',
+        '-f', 's16le', '-ar', '48000', '-ac', '2',
+        'pipe:1',
     ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+
     if (!transcoder.stdout) {
         try { transcoder.kill(); } catch { }
         throw new Error('FFmpeg did not expose an audio output stream.');
@@ -287,11 +289,11 @@ async function resourceFromUrl(url: string) {
         return { resource: createAudioResource(url) };
     }
 
-    // Attempt 1: FFmpeg with browser User-Agent and native auto-reconnect
+    // Attempt 1: Universal FFmpeg Raw PCM stream (s16le 48kHz stereo) with auto-reconnect
     try {
-        const transcoder = spawnOggTranscoder(url, 'MP3');
+        const transcoder = spawnPcmTranscoder(url, 'MP3');
 
-        // Check if FFmpeg fails immediately within 350ms
+        // Verify FFmpeg stays running for 300ms
         await new Promise<void>((resolve, reject) => {
             let exited = false;
             const onExit = (code: number | null) => {
@@ -302,17 +304,17 @@ async function resourceFromUrl(url: string) {
             setTimeout(() => {
                 transcoder.removeListener('exit', onExit);
                 if (!exited) resolve();
-            }, 350);
+            }, 300);
         });
 
         if (transcoder.stdout && !transcoder.killed) {
             return {
-                resource: createAudioResource(transcoder.stdout, { inputType: StreamType.OggOpus }),
+                resource: createAudioResource(transcoder.stdout, { inputType: StreamType.Raw }),
                 transcoder,
             };
         }
     } catch (ffmpegErr) {
-        logger.warn(`[Voice] FFmpeg direct stream unviable for ${url}; attempting Axios stream fallback: ${String(ffmpegErr)}`);
+        logger.warn(`[Voice] FFmpeg PCM stream unviable for ${url}; attempting Axios stream fallback: ${String(ffmpegErr)}`);
     }
 
     // Attempt 2: Axios HTTP stream fallback (uses Node.js native TLS stack)
@@ -328,6 +330,7 @@ async function resourceFromUrl(url: string) {
 
     return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
 }
+
 
 
 
