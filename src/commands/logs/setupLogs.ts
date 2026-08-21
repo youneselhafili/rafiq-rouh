@@ -45,11 +45,13 @@ export function buildLogsPanel(session: LogsSetupSession) {
     );
     const saveRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId('logs_setup_save').setLabel('حفظ الإعدادات').setEmoji('💾').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('logs_setup_delete').setLabel('حذف الإعدادات').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('blacklist_manage').setLabel('إدارة الروابط المعطلة').setEmoji('📋').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('logs_setup_delete').setLabel('حذف الإعدادات').setEmoji('🗑️').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('logs_setup_cancel').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
     );
     return { embeds: [embed], components: [channelRow, controls, saveRow] };
 }
+
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guildId || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {

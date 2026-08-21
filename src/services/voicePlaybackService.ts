@@ -279,12 +279,10 @@ function spawnOggTranscoder(url: string, label: string): ChildProcess {
 }
 
 async function resourceFromUrl(url: string) {
-    const isHLS = /\.m3u8(?:$|\?)/i.test(url);
-    const isLiveStream = /radiojar\.com|icecast|shoutcast|qurango\.net\/radio|backup\.qurango|m3u8/i.test(url);
-
-    if (isHLS || isLiveStream) {
-        // Live/HLS sources need FFmpeg reconnect and transcoding support.
-        const transcoder = spawnOggTranscoder(url, isHLS ? 'HLS' : isLiveStream ? 'live' : 'MP3');
+    if (/^https?:\/\//i.test(url)) {
+        // Use native FFmpeg HTTP streaming with auto-reconnect for all remote audio.
+        // This prevents network stalls or Node socket closures from cutting off recitations mid-surah.
+        const transcoder = spawnOggTranscoder(url, 'MP3');
         if (!transcoder.stdout) {
             try { transcoder.kill(); } catch {}
             throw new Error('FFmpeg did not expose an audio output stream.');
@@ -294,20 +292,9 @@ async function resourceFromUrl(url: string) {
             transcoder,
         };
     }
-    if (/^https?:\/\//i.test(url)) {
-        // Plain surah MP3s are streamed directly. This avoids depending on a
-        // platform-specific FFmpeg child process for every track while the
-        // zero timeout allows long recitations to finish normally.
-        const response = await axios.get(url, {
-            responseType: 'stream',
-            timeout: 15000,
-            maxRedirects: 5,
-            headers: { 'User-Agent': 'Rafiq-Rouh/0.1 Quran audio player' },
-        });
-        return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
-    }
     return { resource: createAudioResource(url) };
 }
+
 
 export async function playRadioSource(channel: VoiceBasedChannel, url: string, label: string): Promise<void> {
     const { connection, player } = await connect(channel);
