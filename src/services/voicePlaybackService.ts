@@ -255,7 +255,7 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
 
 const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
-function spawnPcmTranscoder(url: string, label: string): ChildProcess {
+function spawnOggOpusTranscoder(url: string, label: string): ChildProcess {
     const ffmpegBin = ffmpegPath || 'ffmpeg';
     const transcoder = spawn(ffmpegBin, [
         '-hide_banner', '-loglevel', 'warning',
@@ -265,7 +265,11 @@ function spawnPcmTranscoder(url: string, label: string): ChildProcess {
         '-reconnect_on_network_error', '1',
         '-i', url,
         '-vn',
-        '-f', 's16le', '-ar', '48000', '-ac', '2',
+        '-c:a', 'libopus',
+        '-b:a', '96k',
+        '-application', 'audio',
+        '-frame_duration', '20',
+        '-f', 'ogg',
         'pipe:1',
     ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
 
@@ -284,16 +288,47 @@ function spawnPcmTranscoder(url: string, label: string): ChildProcess {
     return transcoder;
 }
 
+function spawnOggOpusFromStream(inputStream: NodeJS.ReadableStream, label: string): ChildProcess {
+    const ffmpegBin = ffmpegPath || 'ffmpeg';
+    const transcoder = spawn(ffmpegBin, [
+        '-hide_banner', '-loglevel', 'warning',
+        '-i', 'pipe:0',
+        '-vn',
+        '-c:a', 'libopus',
+        '-b:a', '96k',
+        '-application', 'audio',
+        '-frame_duration', '20',
+        '-f', 'ogg',
+        'pipe:1',
+    ], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+
+    if (!transcoder.stdin || !transcoder.stdout) {
+        try { transcoder.kill(); } catch { }
+        throw new Error('FFmpeg did not expose stdio streams.');
+    }
+    inputStream.pipe(transcoder.stdin);
+    let stderr = '';
+    transcoder.stderr?.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-2000); });
+    transcoder.once('error', error => {
+        logger.warn(`[Voice] ${label} (stream) transcoder error: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    transcoder.once('exit', code => {
+        if (code && !transcoder.killed) logger.warn(`[Voice] ${label} (stream) transcoder exited with code ${code}: ${stderr.trim()}`);
+    });
+    return transcoder;
+}
+
 async function resourceFromUrl(url: string) {
     if (!/^https?:\/\//i.test(url)) {
         return { resource: createAudioResource(url) };
     }
 
-    // Attempt 1: Universal FFmpeg Raw PCM stream (s16le 48kHz stereo) with auto-reconnect
+    // Attempt 1: FFmpeg → OggOpus (libopus built into ffmpeg-static; StreamType.OggOpus
+    // lets @discordjs/voice pass-through pre-encoded Opus without needing any Node.js Opus library)
     try {
-        const transcoder = spawnPcmTranscoder(url, 'MP3');
+        const transcoder = spawnOggOpusTranscoder(url, 'MP3');
 
-        // Verify FFmpeg stays running for 300ms
+        // Verify FFmpeg stays alive for 300ms (fails fast if libopus is missing)
         await new Promise<void>((resolve, reject) => {
             let exited = false;
             const onExit = (code: number | null) => {
@@ -309,15 +344,15 @@ async function resourceFromUrl(url: string) {
 
         if (transcoder.stdout && !transcoder.killed) {
             return {
-                resource: createAudioResource(transcoder.stdout, { inputType: StreamType.Raw }),
+                resource: createAudioResource(transcoder.stdout, { inputType: StreamType.OggOpus }),
                 transcoder,
             };
         }
     } catch (ffmpegErr) {
-        logger.warn(`[Voice] FFmpeg PCM stream unviable for ${url}; attempting Axios stream fallback: ${String(ffmpegErr)}`);
+        logger.warn(`[Voice] FFmpeg OggOpus stream unviable for ${url}; attempting Axios+FFmpeg fallback: ${String(ffmpegErr)}`);
     }
 
-    // Attempt 2: Axios HTTP stream fallback (uses Node.js native TLS stack)
+    // Attempt 2: Axios fetch → pipe through FFmpeg → OggOpus (bypasses URL fetch issues)
     const response = await axios.get(url, {
         responseType: 'stream',
         timeout: 20000,
@@ -328,7 +363,11 @@ async function resourceFromUrl(url: string) {
         },
     });
 
-    return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
+    const transcoder = spawnOggOpusFromStream(response.data, 'MP3-Axios');
+    return {
+        resource: createAudioResource(transcoder.stdout!, { inputType: StreamType.OggOpus }),
+        transcoder,
+    };
 }
 
 
