@@ -63,6 +63,25 @@ function env(name: string, fallback = ''): string {
     return String(process.env[name] || fallback).trim();
 }
 
+const ALLOWED_ORIGINS = [
+    'https://rafikk-rouh.web.app',
+    'https://rafikk-rouh.firebaseapp.com',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+];
+
+function getCorsHeaders(request?: IncomingMessage): Record<string, string> {
+    const origin = request ? String(request.headers.origin || '') : '';
+    const allowed = ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.web.app') || origin.endsWith('.firebaseapp.com') ? origin : ALLOWED_ORIGINS[0];
+    return {
+        'Access-Control-Allow-Origin': allowed,
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, X-Requested-With',
+    };
+}
+
 function cookieMap(request: IncomingMessage): Record<string, string> {
     const result: Record<string, string> = {};
     for (const part of String(request.headers.cookie || '').split(';')) {
@@ -75,9 +94,9 @@ function cookieMap(request: IncomingMessage): Record<string, string> {
 
 function cookie(name: string, value: string, options: { maxAge?: number; clear?: boolean } = {}): string {
     const maxAge = options.clear ? '; Max-Age=0' : options.maxAge ? `; Max-Age=${options.maxAge}` : '';
+    // SameSite=None; Secure is required for cross-domain cookie authentication between web app and VPS API
     return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=None; Secure${maxAge}`;
 }
-
 
 function sessionKey(token: string): string {
     return createHash('sha256').update(token).digest('hex');
@@ -89,36 +108,20 @@ function avatarUrl(user: DashboardUser): string {
     return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
 }
 
-function corsHeaders(request?: IncomingMessage): Record<string, string> {
-    const origin = String(request?.headers?.origin || '');
-    const allowedOrigins = [
-        'https://rafikk-rouh.web.app',
-        'https://rafikk-rouh.firebaseapp.com',
-        'http://localhost:5173',
-        'http://localhost:3000',
-    ];
-    const allowOrigin = allowedOrigins.includes(origin) ? origin : 'https://rafikk-rouh.web.app';
-    return {
-        'Access-Control-Allow-Origin': allowOrigin,
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE, PUT',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
-        'Vary': 'Origin',
-    };
-}
-
 function json(response: ServerResponse, status: number, body: unknown, headers: Record<string, string | string[]> = {}, request?: IncomingMessage): void {
+    const cors = getCorsHeaders(request);
     response.writeHead(status, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
-        ...corsHeaders(request),
+        ...cors,
         ...headers,
     });
     response.end(JSON.stringify(body));
 }
 
 function redirect(response: ServerResponse, location: string, headers: Record<string, string | string[]> = {}, request?: IncomingMessage): void {
-    response.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...corsHeaders(request), ...headers });
+    const cors = getCorsHeaders(request);
+    response.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...cors, ...headers });
     response.end();
 }
 
@@ -347,7 +350,7 @@ function dmConfigFromDashboard(current: UserDMConfig, body: Record<string, any>)
     } as Partial<UserDMConfig>;
 }
 
-async function handleOAuthStart(response: ServerResponse, request?: IncomingMessage): Promise<void> {
+async function handleOAuthStart(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const clientId = env('CLIENT_ID', env('DISCORD_CLIENT_ID'));
     const secret = env('DISCORD_CLIENT_SECRET');
     const redirectUri = env('DASHBOARD_REDIRECT_URI', 'https://api.169-58-148-250.sslip.io/auth/callback');
@@ -366,8 +369,9 @@ async function handleOAuthCallback(request: IncomingMessage, response: ServerRes
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
     const expectedState = cookieMap(request).rafiq_oauth_state;
+    const frontendUrl = env('FRONTEND_URL', 'https://rafikk-rouh.web.app');
     if (!code || !state || !expectedState || state !== expectedState) {
-        redirect(response, 'https://rafikk-rouh.web.app/dashboard?auth_error=invalid_state', { 'Set-Cookie': cookie('rafiq_oauth_state', '', { clear: true }) }, request);
+        redirect(response, `${frontendUrl}/dashboard?auth_error=invalid_state`, { 'Set-Cookie': cookie('rafiq_oauth_state', '', { clear: true }) }, request);
         return;
     }
     const clientId = env('CLIENT_ID', env('DISCORD_CLIENT_ID'));
@@ -405,7 +409,7 @@ async function handleOAuthCallback(request: IncomingMessage, response: ServerRes
                 recordFirebaseFailure(error, `save dashboard profile/${user.id}`);
             }
         }
-        redirect(response, 'https://rafikk-rouh.web.app/dashboard', {
+        redirect(response, `${frontendUrl}/dashboard`, {
             'Set-Cookie': [
                 cookie('rafiq_session', sessionToken, { maxAge: Math.floor(SESSION_TTL_MS / 1000) }),
                 cookie('rafiq_oauth_state', '', { clear: true }),
@@ -413,10 +417,9 @@ async function handleOAuthCallback(request: IncomingMessage, response: ServerRes
         }, request);
     } catch (error) {
         logger.error('[Dashboard OAuth] Callback failed:', error);
-        redirect(response, 'https://rafikk-rouh.web.app/dashboard?auth_error=discord_login_failed', { 'Set-Cookie': cookie('rafiq_oauth_state', '', { clear: true }) }, request);
+        redirect(response, `${frontendUrl}/dashboard?auth_error=discord_login_failed`, { 'Set-Cookie': cookie('rafiq_oauth_state', '', { clear: true }) }, request);
     }
 }
-
 
 function staticFile(response: ServerResponse, pathname: string): void {
     const requested = pathname === '/' ? '/index.html' : pathname;
@@ -437,7 +440,7 @@ function staticFile(response: ServerResponse, pathname: string): void {
 async function apiRequest(client: Client, request: IncomingMessage, response: ServerResponse, url: URL): Promise<boolean> {
     const method = request.method || 'GET';
     if (method === 'OPTIONS') {
-        response.writeHead(204, { ...corsHeaders(request), 'Cache-Control': 'no-store' });
+        response.writeHead(204, getCorsHeaders(request));
         response.end();
         return true;
     }
@@ -445,8 +448,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         json(response, 200, { ok: true, discord: client.isReady(), oauthConfigured: Boolean(env('DISCORD_CLIENT_SECRET')), firebase: firestoreAvailable() }, {}, request);
         return true;
     }
-
-    if (url.pathname === '/api/auth/discord/start' && method === 'GET') { await handleOAuthStart(response, request); return true; }
+    if (url.pathname === '/api/auth/discord/start' && method === 'GET') { await handleOAuthStart(request, response); return true; }
     if (url.pathname === '/auth/callback' && method === 'GET') { await handleOAuthCallback(request, response, url); return true; }
     if (url.pathname === '/api/logout' && method === 'POST') {
         const token = cookieMap(request).rafiq_session || '';
@@ -467,8 +469,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         return true;
     }
     if (url.pathname === '/api/me/dm-config' && method === 'GET') {
-        const config = await getUserDMConfig(session.user.id);
-        json(response, 200, { config }, {}, request);
+        json(response, 200, { config: await getUserDMConfig(session.user.id) }, {}, request);
         return true;
     }
     if (url.pathname === '/api/me/dm-config' && method === 'PUT') {
@@ -564,6 +565,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
     return true;
 }
 
+
 export function startDashboardApi(client: Client): void {
     if (dashboardStarted || process.env.DASHBOARD_ENABLED === 'false') return;
     dashboardStarted = true;
@@ -575,7 +577,7 @@ export function startDashboardApi(client: Client): void {
             .then(handled => { if (!handled) staticFile(response, url.pathname); })
             .catch(error => {
                 logger.error(`[Dashboard API] ${request.method} ${url.pathname} failed:`, error);
-                if (!response.headersSent) json(response, 500, { error: 'internal_error' }, {}, request);
+                if (!response.headersSent) json(response, 500, { error: 'internal_error' });
                 else response.end();
             });
     });
