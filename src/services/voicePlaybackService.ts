@@ -1,9 +1,7 @@
-import axios from 'axios';
 import { ChildProcess, spawn } from 'child_process';
-import ffmpegPath from 'ffmpeg-static';
 import {
     AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, entersState,
-    joinVoiceChannel, StreamType, VoiceConnection, VoiceConnectionStatus,
+    joinVoiceChannel, NoSubscriberBehavior, StreamType, VoiceConnection, VoiceConnectionStatus,
 } from '@discordjs/voice';
 import { Client, PermissionFlagsBits, Routes, VoiceBasedChannel } from 'discord.js';
 import { logger } from '../utils/logger';
@@ -206,7 +204,7 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
         stopTranscoder(existing);
         try { existing.player.stop(); } catch { }
         active.delete(guildId);
-        const player = createAudioPlayer();
+        const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Stop } });
         attachConnectionGuards(existing.connection, guildId);
         existing.connection.subscribe(player);
         logger.info(`[Voice] Reusing ready connection in ${channel.id} for source transition.`);
@@ -247,15 +245,17 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
         `Speak=${permissions?.has(PermissionFlagsBits.Speak)}, Connect=${permissions?.has(PermissionFlagsBits.Connect)}, ` +
         `SetStatus=${permissions?.has(PermissionFlagsBits.SetVoiceChannelStatus)}`,
     );
-    const player = createAudioPlayer();
+    const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Stop } });
     connection.subscribe(player);
     return { connection, player };
 }
 
 const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
+const FFMPEG_BIN = process.env.FFMPEG_PATH || '/usr/bin/ffmpeg';
+
 function spawnPcmTranscoder(url: string, label: string): ChildProcess {
-    const ffmpegBin = ffmpegPath || 'ffmpeg';
+    const ffmpegBin = FFMPEG_BIN;
     const transcoder = spawn(ffmpegBin, [
         '-hide_banner', '-loglevel', 'warning',
         '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
@@ -275,7 +275,8 @@ function spawnPcmTranscoder(url: string, label: string): ChildProcess {
     let stderr = '';
     transcoder.stderr?.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-2000); });
     transcoder.once('error', error => {
-        logger.warn(`[Voice] ${label} transcoder process error: ${error instanceof Error ? error.message : String(error)}`);
+        const code = (error as NodeJS.ErrnoException).code ?? 'UNKNOWN';
+        logger.warn(`[Voice] ${label} transcoder spawn failed for "${ffmpegBin}" [${code}]: ${error instanceof Error ? error.message : String(error)}`);
     });
     transcoder.once('exit', code => {
         if (code && !transcoder.killed) logger.warn(`[Voice] ${label} transcoder exited with code ${code}: ${stderr.trim()}`);
@@ -283,14 +284,14 @@ function spawnPcmTranscoder(url: string, label: string): ChildProcess {
     return transcoder;
 }
 
-async function resourceFromUrl(url: string) {
+async function resourceFromUrl(url: string, label = '') {
     if (!/^https?:\/\//i.test(url)) {
         return { resource: createAudioResource(url) };
     }
 
-    // For HLS / Live streams (.m3u8) use FFmpeg
+    // For HLS / Live streams (.m3u8) use FFmpeg → OggOpus (unchanged)
     if (/\.m3u8($|\?)/i.test(url)) {
-        const ffmpegBin = ffmpegPath || 'ffmpeg';
+        const ffmpegBin = FFMPEG_BIN;
         const transcoder = spawn(ffmpegBin, [
             '-hide_banner', '-loglevel', 'warning',
             '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
@@ -310,16 +311,23 @@ async function resourceFromUrl(url: string) {
         }
     }
 
-    // For standard Quran MP3 URLs: stream via Axios without socket timeout
-    const response = await axios.get(url, {
-        responseType: 'stream',
-        headers: {
-            'User-Agent': BROWSER_USER_AGENT,
-            'Accept': '*/*',
-        },
-    });
-
-    return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
+    // For standard MP3 URLs: use FFmpeg directly to fetch and decode to raw PCM.
+    //
+    // WHY NOT Axios + StreamType.Arbitrary:
+    //   axios.get({ responseType: 'stream' }) resolves as soon as HTTP headers arrive,
+    //   before any body bytes. @discordjs/voice then spawns prism-media's internal FFmpeg
+    //   with -analyzeduration 0, which gives up almost immediately on an empty stdin and
+    //   exits → AudioPlayer goes Idle in ~120ms → bot skips every surah.
+    //
+    // spawnPcmTranscoder lets FFmpeg fetch the URL natively (its own HTTP client with
+    // -reconnect flags), buffers properly, and outputs s16le 48kHz stereo PCM on stdout.
+    // StreamType.Raw tells @discordjs/voice the data is already PCM — no second FFmpeg.
+    const trackLabel = label || url.slice(-60);
+    const transcoder = spawnPcmTranscoder(url, trackLabel);
+    return {
+        resource: createAudioResource(transcoder.stdout!, { inputType: StreamType.Raw }),
+        transcoder,
+    };
 }
 
 
@@ -339,7 +347,7 @@ export async function playRadioSource(channel: VoiceBasedChannel, url: string, l
     const start = async () => {
         if (session.stopped || active.get(guildId) !== session) return;
         try {
-            const prepared = await resourceFromUrl(url);
+            const prepared = await resourceFromUrl(url, label);
             stopTranscoder(session);
             session.transcoder = prepared.transcoder;
             player.play(prepared.resource);
@@ -415,7 +423,7 @@ export async function playTrackQueue(
         }
 
         try {
-            const prepared = await resourceFromUrl(track.url);
+            const prepared = await resourceFromUrl(track.url, track.title);
             stopTranscoder(session);
             session.transcoder = prepared.transcoder;
             player.play(prepared.resource);
