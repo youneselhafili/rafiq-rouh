@@ -483,36 +483,6 @@ async function startReading(interaction: PersonalInteraction, extra = false) {
 
 export async function handlePersonalKhatmaInteraction(interaction: PersonalInteraction) {
     const id = interaction.customId;
-    if (id === 'personal_khatma_read_kahf') {
-        return startCustomSurahReading(interaction, 293, 304, 'سورة الكهف');
-    }
-    if (id === 'personal_khatma_choose_surah') {
-        return sendSurahSelectionMenu(interaction);
-    }
-    if (id.startsWith('personal_khatma_select_surah')) {
-        if (!interaction.isStringSelectMenu()) return;
-        const [startPage, endPage, surahName] = interaction.values[0].split('_');
-        return startCustomSurahReading(interaction, Number(startPage), Number(endPage), surahName);
-    }
-    const viewPageMatch = id.match(/^personal_khatma_view_page_(\d+)_(\d+)_(\d+)_(.+)$/);
-    if (viewPageMatch) {
-        const page = Number(viewPageMatch[1]);
-        const startPage = Number(viewPageMatch[2]);
-        const endPage = Number(viewPageMatch[3]);
-        const surahName = viewPageMatch[4];
-        return updateCustomSurahReading(interaction, page, startPage, endPage, surahName);
-    }
-    if (id === 'personal_khatma_view_stop') {
-        await (interaction as any).update({
-            content: '✅ تقبل الله منك صالح الأعمال.',
-            embeds: [],
-            components: [],
-            files: [],
-            attachments: [],
-        });
-        return;
-    }
-
     if (id === 'personal_khatma_config') return openSetup(interaction);
     if (id === 'personal_khatma_read') return startReading(interaction);
     if (id === 'personal_khatma_continue_extra') return startReading(interaction, true);

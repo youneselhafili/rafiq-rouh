@@ -63,25 +63,6 @@ function env(name: string, fallback = ''): string {
     return String(process.env[name] || fallback).trim();
 }
 
-const ALLOWED_ORIGINS = [
-    'https://rafikk-rouh.web.app',
-    'https://rafikk-rouh.firebaseapp.com',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://127.0.0.1:5173',
-];
-
-function getCorsHeaders(request?: IncomingMessage): Record<string, string> {
-    const origin = request ? String(request.headers.origin || '') : '';
-    const allowed = ALLOWED_ORIGINS.includes(origin) || origin.endsWith('.web.app') || origin.endsWith('.firebaseapp.com') ? origin : ALLOWED_ORIGINS[0];
-    return {
-        'Access-Control-Allow-Origin': allowed,
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, X-Requested-With',
-    };
-}
-
 function cookieMap(request: IncomingMessage): Record<string, string> {
     const result: Record<string, string> = {};
     for (const part of String(request.headers.cookie || '').split(';')) {
@@ -94,8 +75,18 @@ function cookieMap(request: IncomingMessage): Record<string, string> {
 
 function cookie(name: string, value: string, options: { maxAge?: number; clear?: boolean } = {}): string {
     const maxAge = options.clear ? '; Max-Age=0' : options.maxAge ? `; Max-Age=${options.maxAge}` : '';
-    // SameSite=None; Secure is required for cross-domain cookie authentication between web app and VPS API
     return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=None; Secure${maxAge}`;
+}
+
+function getCorsHeaders(request?: IncomingMessage): Record<string, string> {
+    const origin = request?.headers?.origin || '*';
+    return {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, X-Requested-With',
+        'Access-Control-Max-Age': '86400',
+    };
 }
 
 function sessionKey(token: string): string {
@@ -109,7 +100,7 @@ function avatarUrl(user: DashboardUser): string {
 }
 
 function json(response: ServerResponse, status: number, body: unknown, headers: Record<string, string | string[]> = {}, request?: IncomingMessage): void {
-    const cors = getCorsHeaders(request);
+    const cors = request ? getCorsHeaders(request) : getCorsHeaders();
     response.writeHead(status, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
@@ -119,12 +110,11 @@ function json(response: ServerResponse, status: number, body: unknown, headers: 
     response.end(JSON.stringify(body));
 }
 
-function redirect(response: ServerResponse, location: string, headers: Record<string, string | string[]> = {}, request?: IncomingMessage): void {
-    const cors = getCorsHeaders(request);
-    response.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...cors, ...headers });
+
+function redirect(response: ServerResponse, location: string, headers: Record<string, string | string[]> = {}): void {
+    response.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...headers });
     response.end();
 }
-
 
 async function bodyJson(request: IncomingMessage): Promise<Record<string, any>> {
     return await new Promise((resolve, reject) => {
@@ -205,10 +195,9 @@ async function deleteSession(token: string): Promise<void> {
 
 async function requireSession(request: IncomingMessage, response: ServerResponse): Promise<DashboardSession | null> {
     const session = await readSession(cookieMap(request).rafiq_session || '');
-    if (!session) json(response, 401, { error: 'authentication_required' }, {}, request);
+    if (!session) json(response, 401, { error: 'authentication_required' });
     return session;
 }
-
 
 async function memberFor(guild: Guild, userId: string): Promise<GuildMember | null> {
     return guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
@@ -350,33 +339,32 @@ function dmConfigFromDashboard(current: UserDMConfig, body: Record<string, any>)
     } as Partial<UserDMConfig>;
 }
 
-async function handleOAuthStart(request: IncomingMessage, response: ServerResponse): Promise<void> {
+async function handleOAuthStart(response: ServerResponse): Promise<void> {
     const clientId = env('CLIENT_ID', env('DISCORD_CLIENT_ID'));
     const secret = env('DISCORD_CLIENT_SECRET');
-    const redirectUri = env('DASHBOARD_REDIRECT_URI', 'https://api.169-58-148-250.sslip.io/auth/callback');
+    const redirectUri = env('DASHBOARD_REDIRECT_URI', 'http://127.0.0.1:5174/auth/callback');
     if (!clientId || !secret) {
-        json(response, 503, { error: 'oauth_not_configured', message: 'Set CLIENT_ID and DISCORD_CLIENT_SECRET in .env.' }, {}, request);
+        json(response, 503, { error: 'oauth_not_configured', message: 'Set CLIENT_ID and DISCORD_CLIENT_SECRET in .env.' });
         return;
     }
     const state = randomBytes(24).toString('hex');
     const params = new URLSearchParams({ client_id: clientId, response_type: 'code', redirect_uri: redirectUri, scope: 'identify guilds', state, prompt: 'consent' });
     redirect(response, `https://discord.com/oauth2/authorize?${params.toString()}`, {
         'Set-Cookie': cookie('rafiq_oauth_state', state, { maxAge: 600 }),
-    }, request);
+    });
 }
 
 async function handleOAuthCallback(request: IncomingMessage, response: ServerResponse, url: URL): Promise<void> {
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
     const expectedState = cookieMap(request).rafiq_oauth_state;
-    const frontendUrl = env('FRONTEND_URL', 'https://rafikk-rouh.web.app');
     if (!code || !state || !expectedState || state !== expectedState) {
-        redirect(response, `${frontendUrl}/dashboard?auth_error=invalid_state`, { 'Set-Cookie': cookie('rafiq_oauth_state', '', { clear: true }) }, request);
+        redirect(response, '/?auth_error=invalid_state', { 'Set-Cookie': cookie('rafiq_oauth_state', '', { clear: true }) });
         return;
     }
     const clientId = env('CLIENT_ID', env('DISCORD_CLIENT_ID'));
     const clientSecret = env('DISCORD_CLIENT_SECRET');
-    const redirectUri = env('DASHBOARD_REDIRECT_URI', 'https://api.169-58-148-250.sslip.io/auth/callback');
+    const redirectUri = env('DASHBOARD_REDIRECT_URI', 'http://127.0.0.1:5174/auth/callback');
     try {
         const tokenResponse = await fetch('https://discord.com/api/v10/oauth2/token', {
             method: 'POST',
@@ -409,15 +397,15 @@ async function handleOAuthCallback(request: IncomingMessage, response: ServerRes
                 recordFirebaseFailure(error, `save dashboard profile/${user.id}`);
             }
         }
-        redirect(response, `${frontendUrl}/dashboard`, {
+        redirect(response, '/', {
             'Set-Cookie': [
                 cookie('rafiq_session', sessionToken, { maxAge: Math.floor(SESSION_TTL_MS / 1000) }),
                 cookie('rafiq_oauth_state', '', { clear: true }),
             ],
-        }, request);
+        });
     } catch (error) {
         logger.error('[Dashboard OAuth] Callback failed:', error);
-        redirect(response, `${frontendUrl}/dashboard?auth_error=discord_login_failed`, { 'Set-Cookie': cookie('rafiq_oauth_state', '', { clear: true }) }, request);
+        redirect(response, '/?auth_error=discord_login_failed', { 'Set-Cookie': cookie('rafiq_oauth_state', '', { clear: true }) });
     }
 }
 
@@ -448,12 +436,13 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         json(response, 200, { ok: true, discord: client.isReady(), oauthConfigured: Boolean(env('DISCORD_CLIENT_SECRET')), firebase: firestoreAvailable() }, {}, request);
         return true;
     }
-    if (url.pathname === '/api/auth/discord/start' && method === 'GET') { await handleOAuthStart(request, response); return true; }
+
+    if (url.pathname === '/api/auth/discord/start' && method === 'GET') { await handleOAuthStart(response); return true; }
     if (url.pathname === '/auth/callback' && method === 'GET') { await handleOAuthCallback(request, response, url); return true; }
     if (url.pathname === '/api/logout' && method === 'POST') {
         const token = cookieMap(request).rafiq_session || '';
         await deleteSession(token);
-        json(response, 200, { ok: true }, { 'Set-Cookie': cookie('rafiq_session', '', { clear: true }) }, request);
+        json(response, 200, { ok: true }, { 'Set-Cookie': cookie('rafiq_session', '', { clear: true }) });
         return true;
     }
     if (!url.pathname.startsWith('/api/')) return false;
@@ -461,22 +450,22 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
     if (!session) return true;
 
     if (url.pathname === '/api/me' && method === 'GET') {
-        json(response, 200, { id: session.user.id, username: session.user.username, globalName: session.user.globalName, avatarUrl: avatarUrl(session.user) }, {}, request);
+        json(response, 200, { id: session.user.id, username: session.user.username, globalName: session.user.globalName, avatarUrl: avatarUrl(session.user) });
         return true;
     }
     if (url.pathname === '/api/guilds' && method === 'GET') {
-        json(response, 200, { guilds: await manageableGuilds(client, session) }, {}, request);
+        json(response, 200, { guilds: await manageableGuilds(client, session) });
         return true;
     }
     if (url.pathname === '/api/me/dm-config' && method === 'GET') {
-        json(response, 200, { config: await getUserDMConfig(session.user.id) }, {}, request);
+        json(response, 200, { config: await getUserDMConfig(session.user.id) });
         return true;
     }
     if (url.pathname === '/api/me/dm-config' && method === 'PUT') {
         const body = await bodyJson(request);
         const current = await getUserDMConfig(session.user.id);
         await updateUserDMConfig(session.user.id, dmConfigFromDashboard(current, body));
-        json(response, 200, { ok: true, config: await getUserDMConfig(session.user.id) }, {}, request);
+        json(response, 200, { ok: true, config: await getUserDMConfig(session.user.id) });
         return true;
     }
     if (url.pathname === '/api/test-dm' && method === 'POST') {
@@ -489,22 +478,22 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
             .addFields({ name: 'المدينة', value: config.city || 'غير مضبوطة', inline: true }, { name: 'المنطقة الزمنية', value: config.timezone || 'غير مضبوطة', inline: true })
             .setTimestamp();
         await user.send({ embeds: [embed] });
-        json(response, 200, { ok: true }, {}, request);
+        json(response, 200, { ok: true });
         return true;
     }
 
     const match = url.pathname.match(/^\/api\/guilds\/(\d+)(?:\/(config|channels|roles|test-message|publish-dm))?$/);
-    if (!match) { json(response, 404, { error: 'not_found' }, {}, request); return true; }
+    if (!match) { json(response, 404, { error: 'not_found' }); return true; }
     const [, guildId, resource = 'config'] = match;
     const guild = await authorizedGuild(client, session, guildId);
-    if (!guild) { json(response, 403, { error: 'guild_access_denied' }, {}, request); return true; }
+    if (!guild) { json(response, 403, { error: 'guild_access_denied' }); return true; }
 
-    if (resource === 'channels' && method === 'GET') { json(response, 200, { channels: await listChannels(guild) }, {}, request); return true; }
-    if (resource === 'roles' && method === 'GET') { json(response, 200, { roles: await listRoles(guild) }, {}, request); return true; }
+    if (resource === 'channels' && method === 'GET') { json(response, 200, { channels: await listChannels(guild) }); return true; }
+    if (resource === 'roles' && method === 'GET') { json(response, 200, { roles: await listRoles(guild) }); return true; }
     if (resource === 'config' && method === 'GET') {
         const config = await getModuleConfig<ServerConfig>(guild.id, 'serverConfig') || {};
         const roles = await getModuleConfig<any>(guild.id, 'roles') || {};
-        json(response, 200, { config, roles }, {}, request);
+        json(response, 200, { config, roles });
         return true;
     }
     if (resource === 'config' && method === 'PUT') {
@@ -531,15 +520,15 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
             await setModuleConfig(guild.id, 'roles', cleanRoles);
         }
         
-        json(response, 200, { ok: true }, {}, request);
+        json(response, 200, { ok: true });
         return true;
     }
     if (resource === 'test-message' && method === 'POST') {
         const body = await bodyJson(request);
         const channel = await guild.channels.fetch(String(body.channelId || '')).catch(() => null);
-        if (!channel?.isTextBased() || channel.isDMBased() || !('send' in channel)) { json(response, 400, { error: 'invalid_channel' }, {}, request); return true; }
+        if (!channel?.isTextBased() || channel.isDMBased() || !('send' in channel)) { json(response, 400, { error: 'invalid_channel' }); return true; }
         await channel.send({ embeds: [new EmbedBuilder().setColor('#52C99A').setTitle('رفيق الروح').setDescription('وصلت رسالة اختبار لوحة التحكم بنجاح.').setTimestamp()] });
-        json(response, 200, { ok: true }, {}, request);
+        json(response, 200, { ok: true });
         return true;
     }
     if (resource === 'publish-dm' && method === 'POST') {
@@ -547,7 +536,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         const channelId = String(body.channelId || '').trim();
         const channel = await guild.channels.fetch(channelId).catch(() => null);
         if (!channel || !('send' in channel) || typeof channel.send !== 'function') {
-            json(response, 400, { error: 'invalid_channel', message: 'Channel is not accessible or not a text channel.' }, {}, request);
+            json(response, 400, { error: 'invalid_channel', message: 'Channel is not accessible or not a text channel.' });
             return true;
         }
         const iconURL = client.user?.displayAvatarURL({ extension: 'png', size: 128 });
@@ -558,13 +547,12 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         config.dmPanelChannelId = channelId;
         await setModuleConfig(guild.id, 'serverConfig', config);
         
-        json(response, 200, { ok: true, config }, {}, request);
+        json(response, 200, { ok: true, config });
         return true;
     }
-    json(response, 405, { error: 'method_not_allowed' }, {}, request);
+    json(response, 405, { error: 'method_not_allowed' });
     return true;
 }
-
 
 export function startDashboardApi(client: Client): void {
     if (dashboardStarted || process.env.DASHBOARD_ENABLED === 'false') return;
