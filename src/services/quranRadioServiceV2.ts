@@ -131,12 +131,32 @@ const QURAN_PANEL_TITLE = '📻 إذاعة رفيق الروح الإسلامي�
 const NOW_PLAYING_TITLE_PREFIX = '📖 تعمل الآن:';
 const RETURN_TO_LIVE_TITLE = '✅ اكتملت طلباتك';
 const TEMPORARY_MESSAGE_LIFETIME_MS = 10 * 60 * 1000;
-const CONTROLLER_NOTICE_LIFETIME_MS = 3 * 60 * 1000;
+const CONTROLLER_NOTICE_LIFETIME_MS = 10 * 1000;
 
 function isPlaybackNoticeTitle(title: string): boolean {
     return title.startsWith(NOW_PLAYING_TITLE_PREFIX) ||
         title === RETURN_TO_LIVE_TITLE ||
         title === '✅ اكتمل التشغيل';
+}
+
+export async function cleanupControllerNotices(client: Client, channel: any): Promise<void> {
+    const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+    if (!messages) return;
+    const deletions: Promise<unknown>[] = [];
+    for (const msg of messages.values()) {
+        if (msg.author?.id !== client.user?.id) continue;
+        const content = String(msg.content || '');
+        if (
+            content.includes('أنت المتحكم') ||
+            content.includes('انتقل إليك التحكم') ||
+            content.includes('Playlist محفوظة') ||
+            content.includes('تم استرجاع لوحة القرآن') ||
+            content.includes('نظام الجمعة مفعل')
+        ) {
+            deletions.push(msg.delete().catch(() => null));
+        }
+    }
+    await Promise.all(deletions);
 }
 
 function scheduleTemporaryMessageDelete(message: any, delayMs = TEMPORARY_MESSAGE_LIFETIME_MS): void {
@@ -193,7 +213,9 @@ function temporaryMessageLifetime(message: any): number {
     if (
         content.includes('أنت المتحكم الآن') ||
         content.includes('انتقل إليك التحكم') ||
-        content.includes('أنت المتحكم الحالي')
+        content.includes('أنت المتحكم الحالي') ||
+        content.includes('تم استرجاع لوحة القرآن') ||
+        content.includes('Playlist محفوظة')
     ) {
         return CONTROLLER_NOTICE_LIFETIME_MS;
     }
@@ -811,6 +833,11 @@ export async function handleUserLeaveRadioV2(client: Client, member: GuildMember
     const state = getQuranRuntimeState(member.guild.id);
     state.controllerOrder = state.controllerOrder.filter(id => id !== member.id);
     const remaining = voiceChannel.members.filter(m => !m.user.bot);
+
+    // Immediately clean up any previous controller notices in voice chat
+    const channel = await voiceTextChannel(client, voiceChannel.id);
+    if (channel) void cleanupControllerNotices(client, channel);
+
     if (remaining.size > 0 && state.controllerId === member.id) {
         const nextId = state.controllerOrder.find(id => remaining.has(id)) || remaining.firstKey()!;
         const next = remaining.get(nextId)!;
@@ -826,6 +853,10 @@ export async function handleUserLeaveRadioV2(client: Client, member: GuildMember
     }
     if (remaining.size === 0) {
         state.controllerId = undefined;
+        if (channel) {
+            void clearNowPlayingNotification(client, state);
+            void cleanupControllerNotices(client, channel);
+        }
         if (isFridayKahfLoopActive(state.guildId) || isAdhanPlaybackActive(state.guildId)) {
             await renderQuranPanel(client, state.guildId);
             return;
