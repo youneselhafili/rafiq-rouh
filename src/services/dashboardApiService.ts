@@ -74,9 +74,31 @@ function cookieMap(request: IncomingMessage): Record<string, string> {
 }
 
 function cookie(name: string, value: string, options: { maxAge?: number; clear?: boolean } = {}): string {
-    const secure = env('NODE_ENV') === 'production' ? '; Secure' : '';
+    const production = env('NODE_ENV') === 'production';
+    const secure = production ? '; Secure' : '';
+    const sameSite = production ? 'None' : 'Lax';
     const maxAge = options.clear ? '; Max-Age=0' : options.maxAge ? `; Max-Age=${options.maxAge}` : '';
-    return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax${secure}${maxAge}`;
+    return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=${sameSite}${secure}${maxAge}`;
+}
+
+const DEFAULT_DASHBOARD_ORIGINS = ['https://rafikk-rouh.web.app'];
+
+function allowedDashboardOrigins(): string[] {
+    const extra = env('DASHBOARD_ALLOWED_ORIGIN')
+        .split(',')
+        .map(origin => origin.trim().replace(/\/$/, ''))
+        .filter(Boolean);
+    return [...new Set([...DEFAULT_DASHBOARD_ORIGINS, ...extra])];
+}
+
+function corsHeaders(request: IncomingMessage): Record<string, string> {
+    const origin = String(request.headers.origin || '').replace(/\/$/, '');
+    if (!origin || !allowedDashboardOrigins().includes(origin)) return {};
+    return {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Credentials': 'true',
+        Vary: 'Origin',
+    };
 }
 
 function sessionKey(token: string): string {
@@ -542,6 +564,17 @@ export function startDashboardApi(client: Client): void {
     const host = env('DASHBOARD_HOST', '127.0.0.1');
     const server = createServer((request, response) => {
         const url = new URL(request.url || '/', `http://${request.headers.host || `${host}:${port}`}`);
+        for (const [header, value] of Object.entries(corsHeaders(request))) response.setHeader(header, value);
+        if (request.method === 'OPTIONS') {
+            if (!response.getHeader('Access-Control-Allow-Origin')) { response.writeHead(204); response.end(); return; }
+            response.writeHead(204, {
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Max-Age': '86400',
+            });
+            response.end();
+            return;
+        }
         void apiRequest(client, request, response, url)
             .then(handled => { if (!handled) staticFile(response, url.pathname); })
             .catch(error => {
