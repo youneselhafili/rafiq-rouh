@@ -220,7 +220,6 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
         adapterCreator: channel.guild.voiceAdapterCreator,
         selfDeaf: false,
         selfMute: false,
-        daveEncryption: true,
     });
     attachConnectionGuards(connection, guildId);
 
@@ -311,11 +310,9 @@ async function resourceFromUrl(url: string) {
         }
     }
 
-    // For standard Quran MP3 URLs: direct HTTP stream with native TLS stack
+    // For standard Quran MP3 URLs: stream via Axios without socket timeout
     const response = await axios.get(url, {
         responseType: 'stream',
-        timeout: 30000,
-        maxRedirects: 5,
         headers: {
             'User-Agent': BROWSER_USER_AGENT,
             'Accept': '*/*',
@@ -324,6 +321,7 @@ async function resourceFromUrl(url: string) {
 
     return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
 }
+
 
 
 
