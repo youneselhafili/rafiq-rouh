@@ -110,6 +110,7 @@ function json(response: ServerResponse, status: number, body: unknown, headers: 
     response.end(JSON.stringify(body));
 }
 
+
 function redirect(response: ServerResponse, location: string, headers: Record<string, string | string[]> = {}): void {
     response.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...headers });
     response.end();
@@ -194,10 +195,9 @@ async function deleteSession(token: string): Promise<void> {
 
 async function requireSession(request: IncomingMessage, response: ServerResponse): Promise<DashboardSession | null> {
     const session = await readSession(cookieMap(request).rafiq_session || '');
-    if (!session) json(response, 401, { error: 'authentication_required' }, {}, request);
+    if (!session) json(response, 401, { error: 'authentication_required' });
     return session;
 }
-
 
 async function memberFor(guild: Guild, userId: string): Promise<GuildMember | null> {
     return guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
