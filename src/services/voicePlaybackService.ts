@@ -128,7 +128,7 @@ function stopTranscoder(session: ActivePlayback): void {
     const transcoder = session.transcoder;
     session.transcoder = undefined;
     if (transcoder && transcoder.exitCode === null && !transcoder.killed) {
-        try { transcoder.kill(); } catch {}
+        try { transcoder.kill(); } catch { }
     }
 }
 
@@ -160,7 +160,7 @@ function scheduleVoiceRecovery(guildId: string, reason: string, delayMs = 5_000)
         } catch (error) {
             logger.warn(`[Voice] ${guildId}: recovery failed after ${reason}: ${error instanceof Error ? error.message : String(error)}`);
             const snapshot = getPlaybackSnapshot(guildId);
-            try { latest.connection.destroy(); } catch {}
+            try { latest.connection.destroy(); } catch { }
             active.delete(guildId);
             if (snapshot) {
                 resumePlayback(snapshot).catch(resumeError => {
@@ -204,7 +204,7 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
     ) {
         existing.stopped = true;
         stopTranscoder(existing);
-        try { existing.player.stop(); } catch {}
+        try { existing.player.stop(); } catch { }
         active.delete(guildId);
         const player = createAudioPlayer();
         attachConnectionGuards(existing.connection, guildId);
@@ -227,7 +227,7 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
     try {
         await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
     } catch (error) {
-        try { connection.destroy(); } catch {}
+        try { connection.destroy(); } catch { }
         throw error;
     }
     const me = channel.guild.members.me;
@@ -253,10 +253,14 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
     return { connection, player };
 }
 
+const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+
 function spawnOggTranscoder(url: string, label: string): ChildProcess {
     if (!ffmpegPath) throw new Error('FFmpeg executable is unavailable for remote playback.');
     const transcoder = spawn(ffmpegPath, [
         '-hide_banner', '-loglevel', 'warning',
+        '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
+        '-user_agent', BROWSER_USER_AGENT,
         '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
         '-reconnect_on_network_error', '1',
         '-i', url, '-map', '0:a:0', '-vn',
@@ -264,7 +268,7 @@ function spawnOggTranscoder(url: string, label: string): ChildProcess {
         '-f', 'ogg', 'pipe:1',
     ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     if (!transcoder.stdout) {
-        try { transcoder.kill(); } catch {}
+        try { transcoder.kill(); } catch { }
         throw new Error('FFmpeg did not expose an audio output stream.');
     }
     let stderr = '';
@@ -279,21 +283,52 @@ function spawnOggTranscoder(url: string, label: string): ChildProcess {
 }
 
 async function resourceFromUrl(url: string) {
-    if (/^https?:\/\//i.test(url)) {
-        // Use native FFmpeg HTTP streaming with auto-reconnect for all remote audio.
-        // This prevents network stalls or Node socket closures from cutting off recitations mid-surah.
-        const transcoder = spawnOggTranscoder(url, 'MP3');
-        if (!transcoder.stdout) {
-            try { transcoder.kill(); } catch {}
-            throw new Error('FFmpeg did not expose an audio output stream.');
-        }
-        return {
-            resource: createAudioResource(transcoder.stdout, { inputType: StreamType.OggOpus }),
-            transcoder,
-        };
+    if (!/^https?:\/\//i.test(url)) {
+        return { resource: createAudioResource(url) };
     }
-    return { resource: createAudioResource(url) };
+
+    // Attempt 1: FFmpeg with browser User-Agent and native auto-reconnect
+    try {
+        const transcoder = spawnOggTranscoder(url, 'MP3');
+
+        // Check if FFmpeg fails immediately within 350ms
+        await new Promise<void>((resolve, reject) => {
+            let exited = false;
+            const onExit = (code: number | null) => {
+                exited = true;
+                reject(new Error(`FFmpeg exited early (code ${code})`));
+            };
+            transcoder.once('exit', onExit);
+            setTimeout(() => {
+                transcoder.removeListener('exit', onExit);
+                if (!exited) resolve();
+            }, 350);
+        });
+
+        if (transcoder.stdout && !transcoder.killed) {
+            return {
+                resource: createAudioResource(transcoder.stdout, { inputType: StreamType.OggOpus }),
+                transcoder,
+            };
+        }
+    } catch (ffmpegErr) {
+        logger.warn(`[Voice] FFmpeg direct stream unviable for ${url}; attempting Axios stream fallback: ${String(ffmpegErr)}`);
+    }
+
+    // Attempt 2: Axios HTTP stream fallback (uses Node.js native TLS stack)
+    const response = await axios.get(url, {
+        responseType: 'stream',
+        timeout: 20000,
+        maxRedirects: 5,
+        headers: {
+            'User-Agent': BROWSER_USER_AGENT,
+            'Accept': '*/*',
+        },
+    });
+
+    return { resource: createAudioResource(response.data, { inputType: StreamType.Arbitrary }) };
 }
+
 
 
 export async function playRadioSource(channel: VoiceBasedChannel, url: string, label: string): Promise<void> {
@@ -493,8 +528,8 @@ export function stopGuildPlayback(guildId: string, clearStatus = true, priorityO
     clearReconnectTimer(guildId);
     session.stopped = true;
     stopTranscoder(session);
-    try { session.player.stop(); } catch {}
-    try { session.connection.destroy(); } catch {}
+    try { session.player.stop(); } catch { }
+    try { session.connection.destroy(); } catch { }
     if (clearStatus) void setPlaybackChannelStatus(session.channel, null);
     active.delete(guildId);
 }
