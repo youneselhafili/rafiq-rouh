@@ -20,7 +20,8 @@
     "firebase-admin": "^14.0.0",
     "libsodium-wrappers": "^0.7.15",
     "moment-timezone": "^0.6.2",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "opusscript": "^0.0.8"
   },
   "devDependencies": {
     "@types/axios": "^0.9.36",
