@@ -79,7 +79,7 @@ function cookie(name: string, value: string, options: { maxAge?: number; clear?:
 }
 
 function getCorsHeaders(request?: IncomingMessage): Record<string, string> {
-    const origin = request?.headers?.origin || '*';
+    const origin = request?.headers?.origin || 'https://rafikk-rouh.web.app';
     return {
         'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Credentials': 'true',
@@ -100,7 +100,7 @@ function avatarUrl(user: DashboardUser): string {
 }
 
 function json(response: ServerResponse, status: number, body: unknown, headers: Record<string, string | string[]> = {}, request?: IncomingMessage): void {
-    const cors = request ? getCorsHeaders(request) : getCorsHeaders();
+    const cors = getCorsHeaders(request);
     response.writeHead(status, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
@@ -109,7 +109,6 @@ function json(response: ServerResponse, status: number, body: unknown, headers: 
     });
     response.end(JSON.stringify(body));
 }
-
 
 function redirect(response: ServerResponse, location: string, headers: Record<string, string | string[]> = {}): void {
     response.writeHead(302, { Location: location, 'Cache-Control': 'no-store', ...headers });
@@ -195,9 +194,10 @@ async function deleteSession(token: string): Promise<void> {
 
 async function requireSession(request: IncomingMessage, response: ServerResponse): Promise<DashboardSession | null> {
     const session = await readSession(cookieMap(request).rafiq_session || '');
-    if (!session) json(response, 401, { error: 'authentication_required' });
+    if (!session) json(response, 401, { error: 'authentication_required' }, {}, request);
     return session;
 }
+
 
 async function memberFor(guild: Guild, userId: string): Promise<GuildMember | null> {
     return guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
