@@ -237,55 +237,92 @@ async function clearNowPlayingNotification(client: Client, state: QuranRuntimeSt
         if (cleaned) cleanedNowPlayingChannels.add(channel.id);
     }
 }
+
+const panelLocks = new Map<string, Promise<void>>();
+
 export async function renderQuranPanel(
     client: Client,
     guildId: string,
     mention?: string,
     mentionLifetimeMs = TEMPORARY_MESSAGE_LIFETIME_MS,
 ): Promise<void> {
-    const state = getQuranRuntimeState(guildId);
-    const channel = await voiceTextChannel(client, state.voiceChannelId);
-    if (!channel) {
-        logger.warn(`[QuranV2] Voice chat unavailable for ${state.voiceChannelId}`);
-        return;
+    const previousLock = panelLocks.get(guildId);
+    if (previousLock) {
+        await previousLock.catch(() => {});
     }
-    const payload = buildQuranPanel(state);
-    if (state.panelMessageId) {
-        const existing = await channel.messages.fetch(state.panelMessageId).catch(() => null);
-        if (existing) {
-            await existing.edit(payload);
-            if (!cleanedPanelChannels.has(channel.id)) {
-                const cleaned = await cleanupBotMessages(
-                    client,
-                    channel,
-                    existing.id,
-                    title => title === QURAN_PANEL_TITLE,
-                );
-                if (cleaned) cleanedPanelChannels.add(channel.id);
-            }
-            if (!restoredTemporaryChannels.has(channel.id)) {
-                const restored = await restoreTemporaryMessageCleanup(client, channel, existing.id);
-                if (restored) restoredTemporaryChannels.add(channel.id);
-            }
-            if (mention) await sendVoiceChat(channel, { content: mention }, true, mentionLifetimeMs);
+
+    const task = (async () => {
+        const state = getQuranRuntimeState(guildId);
+        const channel = await voiceTextChannel(client, state.voiceChannelId);
+        if (!channel) {
+            logger.warn(`[QuranV2] Voice chat unavailable for ${state.voiceChannelId}`);
             return;
         }
-        state.panelMessageId = undefined;
-    }
-    const message = await sendVoiceChat(channel, payload);
-    if (message) {
-        state.panelMessageId = message.id;
-        const cleaned = await cleanupBotMessages(
-            client,
-            channel,
-            message.id,
-            title => title === QURAN_PANEL_TITLE,
-        );
-        if (cleaned) cleanedPanelChannels.add(channel.id);
-        const restored = await restoreTemporaryMessageCleanup(client, channel, message.id);
-        if (restored) restoredTemporaryChannels.add(channel.id);
-        if (mention) await sendVoiceChat(channel, { content: mention }, true, mentionLifetimeMs);
-    }
+        const payload = buildQuranPanel(state);
+
+        // Find existing panel in recent channel history if panelMessageId was lost
+        if (!state.panelMessageId) {
+            const recent = await channel.messages.fetch({ limit: 25 }).catch(() => null);
+            if (recent) {
+                const found = recent.find(
+                    (m: any) => m.author?.id === client.user?.id && m.embeds?.[0]?.title === QURAN_PANEL_TITLE,
+                );
+                if (found) state.panelMessageId = found.id;
+            }
+        }
+
+
+        if (state.panelMessageId) {
+            const existing = await channel.messages.fetch(state.panelMessageId).catch(() => null);
+            if (existing) {
+                await existing.edit(payload).catch(() => null);
+
+                // Purge any extra duplicate panel messages in the channel
+                const recent = await channel.messages.fetch({ limit: 25 }).catch(() => null);
+                if (recent) {
+                    for (const msg of recent.values()) {
+                        if (
+                            msg.id !== existing.id &&
+                            msg.author?.id === client.user?.id &&
+                            msg.embeds?.[0]?.title === QURAN_PANEL_TITLE
+                        ) {
+                            await msg.delete().catch(() => null);
+                        }
+                    }
+                }
+
+                if (mention) await sendVoiceChat(channel, { content: mention }, true, mentionLifetimeMs);
+                return;
+            }
+            state.panelMessageId = undefined;
+        }
+
+        const message = await sendVoiceChat(channel, payload);
+        if (message) {
+            state.panelMessageId = message.id;
+
+            // Purge any extra duplicate panel messages in the channel
+            const recent = await channel.messages.fetch({ limit: 25 }).catch(() => null);
+            if (recent) {
+                for (const msg of recent.values()) {
+                    if (
+                        msg.id !== message.id &&
+                        msg.author?.id === client.user?.id &&
+                        msg.embeds?.[0]?.title === QURAN_PANEL_TITLE
+                    ) {
+                        await msg.delete().catch(() => null);
+                    }
+                }
+            }
+
+            if (mention) await sendVoiceChat(channel, { content: mention }, true, mentionLifetimeMs);
+        }
+    })();
+
+    panelLocks.set(guildId, task);
+    await task.finally(() => {
+        if (panelLocks.get(guildId) === task) panelLocks.delete(guildId);
+    });
 }
 
 async function notifyNowPlaying(client: Client, state: QuranRuntimeState, track: PlaylistTrack, index: number, total: number) {
