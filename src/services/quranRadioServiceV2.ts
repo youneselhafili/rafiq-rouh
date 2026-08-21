@@ -239,6 +239,8 @@ async function clearNowPlayingNotification(client: Client, state: QuranRuntimeSt
 }
 
 const panelLocks = new Map<string, Promise<void>>();
+const lastMentionTime = new Map<string, number>(); // key = `${guildId}:${mention}`
+const MENTION_COOLDOWN_MS = 10_000; // don't repeat same mention within 10 seconds
 
 export async function renderQuranPanel(
     client: Client,
@@ -248,7 +250,9 @@ export async function renderQuranPanel(
 ): Promise<void> {
     const previousLock = panelLocks.get(guildId);
     if (previousLock) {
+        // While waiting for the lock, deduplicate mentions: if same mention is already queued, drop this one's mention
         await previousLock.catch(() => {});
+        mention = undefined; // panel is already being updated; suppress duplicate mention
     }
 
     const task = (async () => {
@@ -291,7 +295,14 @@ export async function renderQuranPanel(
                     }
                 }
 
-                if (mention) await sendVoiceChat(channel, { content: mention }, true, mentionLifetimeMs);
+                if (mention) {
+                    const mKey = `${guildId}:${mention}`;
+                    const now = Date.now();
+                    if (!lastMentionTime.has(mKey) || now - lastMentionTime.get(mKey)! > MENTION_COOLDOWN_MS) {
+                        lastMentionTime.set(mKey, now);
+                        await sendVoiceChat(channel, { content: mention }, true, mentionLifetimeMs);
+                    }
+                }
                 return;
             }
             state.panelMessageId = undefined;
@@ -315,7 +326,14 @@ export async function renderQuranPanel(
                 }
             }
 
-            if (mention) await sendVoiceChat(channel, { content: mention }, true, mentionLifetimeMs);
+            if (mention) {
+                const mKey = `${guildId}:${mention}`;
+                const now = Date.now();
+                if (!lastMentionTime.has(mKey) || now - lastMentionTime.get(mKey)! > MENTION_COOLDOWN_MS) {
+                    lastMentionTime.set(mKey, now);
+                    await sendVoiceChat(channel, { content: mention }, true, mentionLifetimeMs);
+                }
+            }
         }
     })();
 
