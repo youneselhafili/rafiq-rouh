@@ -17,7 +17,7 @@ import {
     recordFirebaseFailure,
     recordFirebaseSuccess,
 } from '../config/firebase';
-import { getUserDMConfig, updateUserDMConfig, UserDMConfig } from './dmSubscriptionService';
+import { deleteUserDMKhatma, getUserDMConfig, updateUserDMConfig, UserDMConfig } from './dmSubscriptionService';
 import { getModuleConfig, setModuleConfig } from './guildConfigService';
 import { getAdhkarV2Config, saveAdhkarV2Config } from './adhkarConfigServiceV2';
 import { getJumuahV2Config, saveJumuahV2Config } from './jumuahConfigServiceV2';
@@ -767,13 +767,8 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
     }
     if (url.pathname === '/api/me/wird/dm' && ['PUT', 'DELETE'].includes(method)) {
         if (method === 'DELETE') {
-            await updateUserDMConfig(session.user.id, { khatma: undefined });
-            const guilds = await visibleGuilds(client, session);
-            const personalGuilds = await Promise.all(guilds.map(async guild => {
-                const config = await getPersonalGuildKhatma(guild.id, session.user.id);
-                return { ...guild, config, progress: personalWirdProgress(config) };
-            }));
-            json(response, 200, { user: { id: session.user.id, username: session.user.username, globalName: session.user.globalName, avatarUrl: avatarUrl(session.user) }, dm: { config: null, progress: null }, guilds: personalGuilds });
+            await deleteUserDMKhatma(session.user.id);
+            json(response, 200, { ok: true });
             return true;
         }
         const body = await bodyJson(request);

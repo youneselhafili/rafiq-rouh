@@ -279,6 +279,24 @@ export async function updateUserDMConfig(userId: string, partialConfig: Partial<
     if (await writeRemoteUser(userId, merged)) writeLocalUser(userId, merged, false);
 }
 
+/** Deletes the daily-wird field both locally and from Firestore.
+ * Omitting a field in a Firestore merge does not delete an existing value. */
+export async function deleteUserDMKhatma(userId: string): Promise<void> {
+    const current = await getUserDMConfig(userId);
+    const { khatma: _removed, ...withoutKhatma } = flattenConfig(current);
+    writeLocalUser(userId, withoutKhatma, true);
+
+    if (!canAttemptFirebase()) return;
+    try {
+        await userDoc(userId).set({ updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        await userRef(userId).set({ khatma: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        recordFirebaseSuccess();
+        writeLocalUser(userId, withoutKhatma, false);
+    } catch (error) {
+        recordFirebaseFailure(error, `delete DM wird/${userId}`);
+    }
+}
+
 export async function getUserDMSubscriptions(userId: string): Promise<UserDMSubscriptions> {
     const config = await getUserDMConfig(userId);
     return {
