@@ -244,9 +244,10 @@ async function memberFor(guild: Guild, userId: string): Promise<GuildMember | nu
 async function canManageGuild(guild: Guild, userId: string): Promise<boolean> {
     const member = await memberFor(guild, userId);
     if (!member) return false;
-    if (member.permissions.has(PermissionFlagsBits.Administrator) || member.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
-    const config = await getModuleConfig<ServerConfig>(guild.id, 'serverConfig');
-    return Boolean(config?.dashboardAdminRoleId && member.roles.cache.has(config.dashboardAdminRoleId));
+    // Server configuration is sensitive: do not trust the OAuth guild list,
+    // Manage Server, or a dashboard-selected role. Only the server owner or a
+    // member with Discord's Administrator permission may edit server settings.
+    return guild.ownerId === userId || member.permissions.has(PermissionFlagsBits.Administrator);
 }
 
 async function manageableGuilds(client: Client, session: DashboardSession) {
