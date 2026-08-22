@@ -25,6 +25,11 @@ const DM_ADHAN_VERSES = [
     { text: 'وَأَقِمِ الصَّلَاةَ إِنَّ الصَّلَاةَ تَنْهَى عَنِ الْفَحْشَاءِ وَالْمُنكَرِ', surah: 'العنكبوت: 45' },
     { text: 'حَافِظُوا عَلَى الصَّلَوَاتِ وَالصَّلَاةِ الْوُسْطَى', surah: 'البقرة: 238' },
 ];
+const DAILY_QURAN_VERSES = [
+    { text: 'وَقُل رَّبِّ زِدْنِي عِلْمًا', source: 'طه: 114' },
+    { text: 'فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ', source: 'البقرة: 152' },
+    { text: 'إِنَّ مَعَ الْعُسْرِ يُسْرًا', source: 'الشرح: 6' },
+];
 
 type PersonalAdhanEvent = 'warning' | 'adhan' | 'prayer_card';
 
@@ -190,7 +195,7 @@ async function sendPersonalSalawat(client: Client, userId: string, config: UserD
     }
 }
 async function sendPersonalAdhan(client: Client, userId: string, config: UserDMConfig) {
-    if (!config.enabled || !config.adhanConfig.enabled || !config.city) return;
+    if (!config.enabled || !config.city) return;
     const meta = cityMeta(config.city);
     if (!meta) return;
 
@@ -202,7 +207,6 @@ async function sendPersonalAdhan(client: Client, userId: string, config: UserDMC
     const date = now.format('YYYY-MM-DD');
 
     for (const prayer of PRAYERS) {
-        if (!config.adhanConfig.prayers[prayer]) continue;
         const time = cleanTime(schedule.timings[prayer] || '');
         if (!time) continue;
         const [hour, minute] = time.split(':').map(Number);
@@ -216,7 +220,7 @@ async function sendPersonalAdhan(client: Client, userId: string, config: UserDMC
         ];
 
         for (const event of events) {
-            if (!config.adhanConfig.events[event.key] || !event.due) continue;
+            if (!config.adhanConfig.enabled || !config.adhanConfig.prayers[prayer] || !config.adhanConfig.events[event.key] || !event.due) continue;
             const eventKey = `${date}:personal_adhan:${config.city}:${prayer}:${event.key}`;
             if (alreadySent(config, eventKey) || running.has(`${userId}:${eventKey}`)) continue;
 
@@ -235,6 +239,19 @@ async function sendPersonalAdhan(client: Client, userId: string, config: UserDMC
             } finally {
                 running.delete(`${userId}:${eventKey}`);
             }
+        }
+
+        // These event-based adhkar are independent choices. They do not require
+        // the user to enable the adhan message itself, only the adhkar category.
+        if (prayer === 'Fajr') {
+            const wakeupDiff = now.diff(target.clone().subtract(30, 'minutes'), 'minutes');
+            if (wakeupDiff >= 0 && wakeupDiff <= 1) {
+                await sendPersonalAdhkarCategory(client, userId, config, 'أذكار الاستيقاظ', `${date}:personal_wakeup:${config.city}`);
+            }
+        }
+        const wuduDiff = now.diff(target.clone().add(5, 'minutes'), 'minutes');
+        if (wuduDiff >= 0 && wuduDiff <= 1) {
+            await sendPersonalAdhkarCategory(client, userId, config, 'أذكار الوضوء', `${date}:personal_wudu:${config.city}:${prayer}`);
         }
     }
 }
@@ -255,6 +272,42 @@ async function sendPersonalScheduledAdhkar(client: Client, userId: string, confi
     }
 }
 
+async function sendPersonalReminder(client: Client, userId: string, config: UserDMConfig, eventKey: string, title: string, description: string) {
+    if (alreadySent(config, eventKey) || running.has(`${userId}:${eventKey}`)) return;
+    running.add(`${userId}:${eventKey}`);
+    try {
+        const user = await client.users.fetch(userId).catch(() => null);
+        if (!user) return;
+        await user.send({ embeds: [new EmbedBuilder().setColor(COLORS.PRIMARY).setTitle(title).setDescription(description).setFooter({ text: BOT_FOOTER }).setTimestamp()] });
+        await addDMSentEvent(userId, eventKey);
+        config.runtime = { ...config.runtime, sentEvents: [...(config.runtime?.sentEvents || []), eventKey].slice(-500) };
+    } catch (error) {
+        logger.warn(`[DM Scheduler] Failed to send personal reminder to ${userId}: ${String(error)}`);
+    } finally {
+        running.delete(`${userId}:${eventKey}`);
+    }
+}
+
+async function sendPersonalQuranAndJumuah(client: Client, userId: string, config: UserDMConfig) {
+    if (!config.enabled) return;
+    const now = moment().tz(config.timezone || 'Africa/Casablanca');
+    const date = now.format('YYYY-MM-DD');
+    const minute = now.format('HH:mm');
+    const quran = config.quranConfig;
+    if (quran.enabled && minute === quran.reminderTime) {
+        if (quran.dailyAyah) {
+            const verse = DAILY_QURAN_VERSES[now.dayOfYear() % DAILY_QURAN_VERSES.length];
+            await sendPersonalReminder(client, userId, config, `${date}:personal_quran_ayah`, 'آية اليوم', `${verse.text}\n\n﴿ ${verse.source} ﴾`);
+        }
+        if (quran.readingReminder) await sendPersonalReminder(client, userId, config, `${date}:personal_quran_reading`, 'تذكير بالورد القرآني', 'خصص دقائق من يومك لتلاوة القرآن الكريم ومراجعة وردك.');
+        if (quran.kahf && now.isoWeekday() === 5) await sendPersonalReminder(client, userId, config, `${date}:personal_quran_kahf`, 'تذكير سورة الكهف', 'من سنن يوم الجمعة قراءة سورة الكهف والإكثار من الصلاة على النبي ﷺ.');
+    }
+    const jumuah = config.jumuahConfig;
+    if (jumuah.enabled && now.isoWeekday() === 5 && minute === jumuah.reminderTime) {
+        await sendPersonalReminder(client, userId, config, `${date}:personal_jumuah`, dmText('jumuah_dm', config.language), 'جمعة مباركة. أكثر من الصلاة على النبي ﷺ، واقرأ سورة الكهف، وتحَرَّ ساعة الإجابة.');
+    }
+}
+
 export async function scanPersonalDMSchedules(client: Client): Promise<void> {
     const configs = await getAllDMUserConfigs();
     for (const { userId, config } of configs) {
@@ -266,6 +319,9 @@ export async function scanPersonalDMSchedules(client: Client): Promise<void> {
         });
         await sendPersonalScheduledAdhkar(client, userId, config).catch(error => {
             logger.warn(`[DM Scheduler] User ${userId} adhkar scan failed: ${String(error)}`);
+        });
+        await sendPersonalQuranAndJumuah(client, userId, config).catch(error => {
+            logger.warn(`[DM Scheduler] User ${userId} Quran/Jumuah scan failed: ${String(error)}`);
         });
     }
 }
