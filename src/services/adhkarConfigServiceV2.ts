@@ -19,8 +19,8 @@ const MODULE = 'adhkarV2';
 const FRIDAY_ADHKAR = 'أذكار يوم الجمعة';
 
 function reconcileCategoryConfig(config: AdhkarV2Config): boolean {
-    // TXT files are the source of truth: deleted files disappear from guild config,
-    // and newly added valid categories are enabled automatically.
+    // The catalog is the source of truth. New categories start paused: users must
+    // explicitly opt in before the scheduler is allowed to send them.
     const validKeys = getAllAdhkarCategoryNames().map(category => category.key);
     if (!validKeys.length) return false;
     const valid = new Set(validKeys);
@@ -33,7 +33,7 @@ function reconcileCategoryConfig(config: AdhkarV2Config): boolean {
     }
     for (const key of validKeys) {
         if (!config.categories[key]) {
-            config.categories[key] = 'enabled';
+            config.categories[key] = 'paused';
             changed = true;
         }
     }
@@ -82,4 +82,3 @@ export async function getAllAdhkarV2Guilds(): Promise<Array<{ guildId: string; c
     }
     return [...result.entries()].map(([guildId, config]) => ({ guildId, config }));
 }
-

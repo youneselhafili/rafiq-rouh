@@ -10,6 +10,7 @@ import { BOT_FOOTER, COLORS } from '../utils/constants';
 import { generateAdhanImage, generateAdhanWarningImage, generatePrayerCard, generateSalawatImage } from './canvasService';
 import { tryBuildAttachment } from './canvasFallback';
 import { loadSalawatTexts } from './salawatService';
+import { getAdhkarByKey, getAllAdhkarCategoryNames } from './contentService';
 
 const PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
 const PRAYER_AR: Record<string, string> = {
@@ -100,6 +101,32 @@ function cityMeta(cityNameEn?: string) {
 
 function alreadySent(config: UserDMConfig, key: string): boolean {
     return Boolean(config.runtime?.sentEvents?.includes(key));
+}
+
+async function sendPersonalAdhkarCategory(client: Client, userId: string, config: UserDMConfig, categoryKey: string, eventKey: string) {
+    const categories = config.adhkarConfig.categories as Record<string, boolean>;
+    if (!config.enabled || !config.adhkarConfig.enabled || categories[categoryKey] !== true || alreadySent(config, eventKey)) return;
+    const category = getAllAdhkarCategoryNames().find(item => item.key === categoryKey);
+    const item = getAdhkarByKey(categoryKey)[0];
+    if (!category || !item || running.has(`${userId}:${eventKey}`)) return;
+    running.add(`${userId}:${eventKey}`);
+    try {
+        const user = await client.users.fetch(userId).catch(() => null);
+        if (!user) return;
+        const embed = new EmbedBuilder()
+            .setColor(COLORS.PRIMARY)
+            .setTitle(`${category.emoji || '📿'} ${category.name}`)
+            .setDescription(`${item.text}${item.count ? `\n\nالتكرار: ${item.count}` : ''}${item.source ? `\nالمصدر: ${item.source}` : ''}`)
+            .setFooter({ text: BOT_FOOTER })
+            .setTimestamp();
+        await user.send({ embeds: [embed] });
+        await addDMSentEvent(userId, eventKey);
+        config.runtime = { ...config.runtime, sentEvents: [...(config.runtime?.sentEvents || []), eventKey].slice(-500) };
+    } catch (error) {
+        logger.warn(`[DM Scheduler] Failed to send personal adhkar to ${userId}: ${String(error)}`);
+    } finally {
+        running.delete(`${userId}:${eventKey}`);
+    }
 }
 
 function nextFixedSalawat(now: moment.Moment, fixedTimes: string[]): moment.Moment | null {
@@ -201,12 +228,30 @@ async function sendPersonalAdhan(client: Client, userId: string, config: UserDMC
                 await user.send(payload);
                 await addDMSentEvent(userId, eventKey);
                 config.runtime = { ...config.runtime, sentEvents: [...(config.runtime?.sentEvents || []), eventKey].slice(-500) };
+                const linkedCategory = event.key === 'adhan' ? 'أذكار الآذان' : event.key === 'prayer_card' ? 'أذكار بعد الصلاة' : null;
+                if (linkedCategory) await sendPersonalAdhkarCategory(client, userId, config, linkedCategory, `${eventKey}:adhkar`);
             } catch (error) {
                 logger.warn(`[DM Scheduler] Failed to send personal adhan to ${userId}: ${String(error)}`);
             } finally {
                 running.delete(`${userId}:${eventKey}`);
             }
         }
+    }
+}
+
+/** Sends only categories explicitly enabled by this user and only at their
+ * catalog-defined time. Categories without a schedule are never guessed. */
+async function sendPersonalScheduledAdhkar(client: Client, userId: string, config: UserDMConfig) {
+    if (!config.enabled || !config.adhkarConfig.enabled) return;
+    const timezone = config.timezone || 'Africa/Casablanca';
+    const now = moment().tz(timezone);
+    const minute = now.format('HH:mm');
+    const date = now.format('YYYY-MM-DD');
+    const categories = config.adhkarConfig.categories as Record<string, boolean>;
+
+    for (const category of getAllAdhkarCategoryNames()) {
+        if (categories[category.key] !== true || !category.defaultTime || category.defaultTime !== minute) continue;
+        await sendPersonalAdhkarCategory(client, userId, config, category.key, `${date}:personal_adhkar:${category.key}:${minute}`);
     }
 }
 
@@ -218,6 +263,9 @@ export async function scanPersonalDMSchedules(client: Client): Promise<void> {
         });
         await sendPersonalSalawat(client, userId, config).catch(error => {
             logger.warn(`[DM Scheduler] User ${userId} salawat scan failed: ${String(error)}`);
+        });
+        await sendPersonalScheduledAdhkar(client, userId, config).catch(error => {
+            logger.warn(`[DM Scheduler] User ${userId} adhkar scan failed: ${String(error)}`);
         });
     }
 }

@@ -98,7 +98,6 @@ export function getAdhkarEmoji(type: string): string {
 }
 
 function categoryEnabled(config: AdhkarV2Config, type: string): boolean {
-    if (type === FRIDAY_ADHKAR) return config.enabled && config.categories[type] !== 'paused';
     return config.enabled && config.categories[type] === 'enabled';
 }
 

@@ -21,7 +21,6 @@ export interface AdhkarSetupSession {
 }
 
 export const activeAdhkarSetups = new Map<string, AdhkarSetupSession>();
-const DEFAULT_TYPES = ['أذكار الصباح', 'أذكار المساء', 'أذكار النوم', 'أذكار الآذان', 'أذكار الوضوء'];
 
 export const data = new SlashCommandBuilder()
     .setName('setup_adhkar')
@@ -39,7 +38,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const primaryIndex = existing
         ? Math.max(0, zones.findIndex(zone => zone.country === existing.primaryZoneCountry && zone.city === existing.primaryZoneCity))
         : 0;
-    const categories = existing?.categories || Object.fromEntries(DEFAULT_TYPES.map(type => [type, 'enabled' as const]));
+    // New setups are opt-in. Nothing is sent until the administrator explicitly
+    // enables the selected categories and saves.
+    const categories = existing?.categories || Object.fromEntries(getAllAdhkarCategoryNames().map(category => [category.key, 'paused' as const]));
     const session: AdhkarSetupSession = {
         guildId: interaction.guildId!, enabled: existing?.enabled ?? true,
         generalChannelId: existing?.generalChannelId, zones, primaryZoneIndex: primaryIndex,
@@ -58,13 +59,13 @@ function mainPayload(session: AdhkarSetupSession) {
     const enabledCount = Object.values(session.categories).filter(status => status === 'enabled').length;
     const pausedCount = Object.values(session.categories).filter(status => status === 'paused').length;
     const embed = new EmbedBuilder().setColor(UI_COLORS.BRAND).setTitle('📿 إعداد الأذكار المتقدمة')
-        .setDescription('اختَر منطقة الأذان المرجعية وقناة الأذكار العامة. أذكار الأذان والوضوء تذهب إلى قناة الأذان الخاصة بالمنطقة، وأذكار الاستيقاظ والنوم وباقي الأذكار إلى القناة العامة.')
+        .setDescription('اختر المنطقة المرجعية والقناة العامة، ثم فعّل الأنواع التي تريدها فقط. لا يرسل البوت أي ذكر متوقف أو غير محدد.')
         .addFields(
             { name: 'الحالة العامة', value: session.enabled ? '✅ مفعلة' : '⏸️ متوقفة', inline: true },
             { name: 'المنطقة المرجعية', value: zone ? `${zone.city} — ${zone.country} (\`${zone.timezone}\`)` : 'غير محددة', inline: true },
             { name: 'القناة العامة', value: session.generalChannelId ? `<#${session.generalChannelId}>` : 'لم يتم الاختيار', inline: true },
-            { name: 'الأنواع', value: `✅ ${enabledCount} مفعلة | ⏸️ ${pausedCount} متوقفة`, inline: false },
-            { name: 'المواعيد والقنوات', value: 'قناة الأذكار: الصباح 06:00 • المساء 18:00 • الاستيقاظ قبل الفجر بـ30 دقيقة • النوم بعد العشاء بساعة.\nقناة الأذان: أذكار الأذان مع كل صلاة • الوضوء بعد 5 دقائق.\nنهار الجمعة: ذكر واحد من قاعدة الجمعة ملكيرة بعد ذكر الصباح، بدون تكرار حتى تكمل 52 ذكراً. باقي الأنواع داخل الفواصل النهارية بين الصلوات.', inline: false },
+            { name: 'الأنواع', value: `✅ ${enabledCount} مفعلة | ⏸️ ${pausedCount} متوقفة\nلن يصل أي نوع متوقف إلى القنوات.`, inline: false },
+            { name: 'المواعيد والقنوات', value: 'القناة العامة: الصباح 06:00 • المساء 18:00 • الاستيقاظ قبل الفجر بـ30 دقيقة • النوم بعد العشاء بساعة.\nقناة الأذان: أذكار الأذان مع كل صلاة • الوضوء بعد 5 دقائق.\nيوم الجمعة: ذكر واحد من أذكار الجمعة بعد أذكار الصباح. أما بقية الأنواع المفعلة فتوزع بين الصلوات.', inline: false },
         )
         .setFooter({ text: 'لا يتم تطبيق أي تغيير قبل الضغط على حفظ.' });
     const zones = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
@@ -97,7 +98,7 @@ function categoryPayload(session: AdhkarSetupSession) {
         return `${status === 'enabled' ? '✅' : status === 'paused' ? '⏸️' : '⚪'} **${category.name}**`;
     });
     const embed = new EmbedBuilder().setColor(UI_COLORS.BRAND).setTitle('🗂️ إدارة أنواع الأذكار')
-        .setDescription(`${lines.join('\n')}\n\nحدد نوعاً أو أكثر ثم اختَر تفعيل/توقيف/حذف. زر المعاينة يستعمل أول نوع محدد ولا يستهلك دوره.`)
+        .setDescription(`${lines.join('\n')}\n\n✅ مفعّل: يُرسل في موعده. ⏸️ متوقف: لا يُرسل أبداً.\nحدد نوعاً أو أكثر ثم اختر تفعيل أو إيقاف. زر المعاينة خاص بك ولا يرسل إلى القناة.`)
         .setFooter({ text: `صفحة ${session.categoryPage + 1}/${pages} — التعديلات مؤقتة حتى الحفظ` });
     const select = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder().setCustomId('adhkar_setup_type_select').setPlaceholder('حدد الأنواع').setMinValues(1).setMaxValues(visible.length).addOptions(
