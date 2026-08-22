@@ -869,7 +869,10 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
     const match = url.pathname.match(/^\/api\/guilds\/(\d+)(?:\/(config|channels|roles|test-message|publish-dm))?$/);
     if (!match) { json(response, 404, { error: 'not_found' }); return true; }
     const [, guildId, resource = 'config'] = match;
-    const readOnlyResource = method === 'GET' && (resource === 'config' || resource === 'channels');
+    // Any member of a shared guild may inspect its current setup.  Mutations
+    // still go through authorizedGuild below, which requires the server owner
+    // or the Discord Administrator permission.
+    const readOnlyResource = method === 'GET' && (resource === 'config' || resource === 'channels' || resource === 'roles');
     const guild = readOnlyResource
         ? await sharedGuild(client, session, guildId)
         : await authorizedGuild(client, session, guildId);
@@ -922,7 +925,10 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         json(response, 200, {
             readOnly: !canManage,
             config,
-            roles: canManage ? roles : {},
+            // Role names/IDs are part of the read-only setup view as well.
+            // Do not hide them from ordinary members; the write route remains
+            // protected by authorizedGuild.
+            roles,
             adhkar: {
                 enabled: adhkarConfig?.enabled ?? false,
                 categories: getAllAdhkarCategoryNames().map(category => ({
