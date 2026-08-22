@@ -163,9 +163,7 @@ import { getSubscribedUsers, getUserDMConfig } from './dmSubscriptionService';
 import { dmText } from './dmLocalizationService';
 
 // Map adhkar type string to the granular DM subscription key
-import { UserDMSubscriptions } from './dmSubscriptionService';
-
-function typeToSubscriptionKey(type: string): keyof UserDMSubscriptions {
+function typeToSubscriptionKey(type: string): string {
     if (type === 'أذكار الصباح') return 'adhkar_sabah';
     if (type === 'أذكار المساء') return 'adhkar_masa';
     if (type === 'أذكار الآذان') return 'adhkar_adhan';
@@ -173,7 +171,7 @@ function typeToSubscriptionKey(type: string): keyof UserDMSubscriptions {
     if (type === 'أذكار النوم') return 'adhkar_nawm';
     if (type === 'أذكار الاستيقاظ') return 'adhkar_istiyqaz';
     if (type === 'أذكار يوم الجمعة') return 'adhkar_jumuah';
-    return 'adhkar_other';
+    return type;
 }
 
 function compactCombinedDescription(description: string): string {

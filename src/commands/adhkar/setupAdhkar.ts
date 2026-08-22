@@ -32,7 +32,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply({ flags: 64 });
     const zones = (await getManagedAdhanZones(interaction.guildId!)).filter(zone => zone.enabled);
     if (!zones.length) {
-        await interaction.editReply({ content: '❌ خاصك أولاً تضيف وتفعّل منطقة أذان باستعمال `/setup_adhan`، لأنها هي المرجع للتوقيت.' });
+        await interaction.editReply({ content: '❌ يجب أن أولاً تضيف وتفعّل منطقة أذان باستعمال `/setup_adhan`، لأنها هي المرجع للتوقيت.' });
         return;
     }
     const existing = await getAdhkarV2Config(interaction.guildId!);
@@ -64,7 +64,7 @@ function mainPayload(session: AdhkarSetupSession) {
             { name: 'المنطقة المرجعية', value: zone ? `${zone.city} — ${zone.country} (\`${zone.timezone}\`)` : 'غير محددة', inline: true },
             { name: 'القناة العامة', value: session.generalChannelId ? `<#${session.generalChannelId}>` : 'لم يتم الاختيار', inline: true },
             { name: 'الأنواع', value: `✅ ${enabledCount} مفعلة | ⏸️ ${pausedCount} متوقفة`, inline: false },
-            { name: 'المواعيد والقنوات', value: 'قناة الأذكار: الصباح 06:00 • المساء 18:00 • الاستيقاظ قبل الفجر بـ30 دقيقة • النوم بعد العشاء بساعة.\nقناة الأذان: أذكار الأذان مع كل صلاة • الوضوء بعد 5 دقائق.\nنهار الجمعة: ذكر واحد من قاعدة الجمعة مباشرة بعد ذكر الصباح، بلا تكرار حتى تكمل 52 ذكراً. باقي الأنواع داخل الفواصل النهارية بين الصلوات.', inline: false },
+            { name: 'المواعيد والقنوات', value: 'قناة الأذكار: الصباح 06:00 • المساء 18:00 • الاستيقاظ قبل الفجر بـ30 دقيقة • النوم بعد العشاء بساعة.\nقناة الأذان: أذكار الأذان مع كل صلاة • الوضوء بعد 5 دقائق.\nنهار الجمعة: ذكر واحد من قاعدة الجمعة ملكيرة بعد ذكر الصباح، بدون تكرار حتى تكمل 52 ذكراً. باقي الأنواع داخل الفواصل النهارية بين الصلوات.', inline: false },
         )
         .setFooter({ text: 'لا يتم تطبيق أي تغيير قبل الضغط على حفظ.' });
     const zones = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(

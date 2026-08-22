@@ -1,4 +1,4 @@
-﻿import {
+import {
     ActionRowBuilder,
     ButtonInteraction,
     ModalBuilder,

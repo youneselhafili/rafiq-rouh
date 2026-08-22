@@ -648,7 +648,7 @@ export async function playScheduledKahf(client: Client, guildId: string, reciter
         await renderQuranPanel(client, guildId);
         await sendAuditLog(client, guildId, {
             level: 'success', system: 'Jumuah', action: 'Friday Surat Al-Kahf completed',
-            details: `القارئ: ${reciter.name} — المصدر السابق: ${previousSnapshot ? 'تمت استعادته' : config.twentyFourSeven ? 'عاد البث المباشر' : 'لا يوجد'}`,
+            details: `القارئ: ${reciter.name} — المصدر السابق: ${previousSnapshot ? 'تمت استعادته' : config.twentyFourSeven ? 'عاد البث الملكير' : 'لا يوجد'}`,
         });
     });
     await sendAuditLog(client, guildId, {
@@ -891,7 +891,7 @@ async function playlistView(interaction: any, state: QuranRuntimeState, replace 
     const listDescription = pageTracks.length
         ? pageTracks.map((t, i) => `**${start + i + 1}.** ${t.title} — ${t.subtitle}`).join('\n')
         : 'القائمة فارغة.';
-    const embed = new EmbedBuilder().setColor(0x3498db).setTitle(`📋 Playlist ديال <@${userId}>`)
+    const embed = new EmbedBuilder().setColor(0x3498db).setTitle(`📋 Playlist الخاصة بـ <@${userId}>`)
         .setDescription(`${notice ? `${notice}\n\n` : ''}${listDescription}`)
         .setFooter({ text: `صفحة ${state.playlistPage + 1}/${pages} — ${playlist.tracks.length} سورة` });
     const components: any[] = [];
@@ -918,7 +918,7 @@ async function playlistDecisionView(interaction: any, state: QuranRuntimeState) 
     const playlist = await loadPlaylist(state.guildId, userId);
     if (!playlist.tracks.length) {
         await interaction.followUp({
-            content: '📋 القائمة ديالك خاوية حالياً. تقدر تضيف سور من **القراء المفصلون** أو **المكتبة الصوتية** وغادي يبقاو محفوظين عندك فجميع السيرفرات!',
+            content: '📋 القائمة الخاصة بك خاوية حالياً. يمكنك تضيف سور من **القراء المفصلون** أو **المكتبة الصوتية** وسوف يبقاو محفوظين لديك فجميع السيرفرات!',
             flags: 64,
         });
         return;
@@ -927,7 +927,7 @@ async function playlistDecisionView(interaction: any, state: QuranRuntimeState) 
         .setColor(0x5865f2)
         .setTitle('📋 قائمة القرآن الخاصة بك')
         .setDescription(
-            `عندك حالياً **${playlist.tracks.length}** سورة محفوظة فـPlaylist الخاصة بك (محفوظة على حسابك فجميع السيرفرات).\n\n` +
+            `لديك حالياً **${playlist.tracks.length}** سورة محفوظة في Playlist الخاصة بك (محفوظة على حسابك فجميع السيرفرات).\n\n` +
             `📍 الموقع الحالي: السورة رقم **${(playlist.position || 0) + 1}** من أصل **${playlist.tracks.length}**\n\n` +
             'اختر العملية التي تريد القيام بها:',
         );
@@ -967,7 +967,7 @@ async function resetPlaylistChoices(interaction: any, state: QuranRuntimeState):
     state.phase = 'main';
     state.mode = 'AudioLibrary';
     await interaction.editReply({
-        content: '✅ تم مسح اختياراتك. تقدر دابا تختار القارئ والسور من جديد، والصوت الحالي غيبقى خدام حتى تشغل اختيار جديد.',
+        content: '✅ تم مسح اختياراتك. يمكنك الآن تختار القارئ والسور من جديد، والصوت الحالي غيبقى خدام حتى تشغل اختيار جديد.',
         embeds: [],
         components: [],
     });
@@ -978,7 +978,7 @@ async function requireControl(interaction: any, state: QuranRuntimeState): Promi
     const isAdmin = member.permissions.has(PermissionFlagsBits.ManageGuild);
     if (!state.controllerId && !isAdmin) {
         if (member.voice.channelId !== state.voiceChannelId) {
-            await interaction.reply({ content: '❌ خاصك تكون داخل قناة القرآن باش تولّي المتحكم.', flags: 64 });
+            await interaction.reply({ content: '❌ يجب أن تكون داخل قناة القرآن لكي تولّي المتحكم.', flags: 64 });
             return false;
         }
         state.controllerId = member.id;
@@ -1106,7 +1106,7 @@ export async function handleRadioInteractionV2(interaction: any) {
                 interaction,
                 state,
                 true,
-                `✅ تجمعو **${playlist.tracks.length}** اختيار فـPlaylist وحدة بنفس الترتيب.`,
+                `✅ تجمعو **${playlist.tracks.length}** اختيار في Playlist وحدة بنفس الترتيب.`,
             );
         }
         else if (id === 'qr_playlist_reset') await resetPlaylistChoices(interaction, state);

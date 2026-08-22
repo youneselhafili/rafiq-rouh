@@ -59,7 +59,7 @@ export function buildAdhanSetupPayload(session: AdhanSetupSession) {
     const embed = new EmbedBuilder()
         .setColor(UI_COLORS.BRAND)
         .setTitle('🕌 إعداد منطقة الأذان')
-        .setDescription('اختر قناة الإشعارات والمنطقة ثم اضغط **حفظ المنطقة**. إذا عندك معرّف القناة استعمل زر **لصق معرّف القناة**؛ البحث داخل القائمة كيخدم باسم القناة فقط.')
+        .setDescription('اختر قناة الإشعارات والمنطقة ثم اضغط **حفظ المنطقة**. إذا لديك معرّف القناة استعمل زر **لصق معرّف القناة**؛ البحث داخل القائمة كيخدم باسم القناة فقط.')
         .addFields(
             { name: '💬 قناة الإشعارات', value: session.channelId ? `<#${session.channelId}>` : 'لم يتم الاختيار', inline: true },
             { name: '🌍 الدولة', value: country ? country.countryAr : 'لم يتم الاختيار', inline: true },
@@ -97,7 +97,7 @@ function buildAudioPayload(session: AdhanSetupSession) {
         .setDescription('هذه الإعدادات تطبق على جميع المناطق. أذان الفجر يستعمل دائماً الملف الخاص به، وبقية الصلوات تستعمل اختيارك أدناه.')
         .addFields(
             { name: 'الحالة', value: modeLabel(session.audio.mode), inline: true },
-            { name: 'الصوت', value: session.audio.audioChoice === 'random' ? '🔀 عشوائي بلا تكرار حتى تنتهي القائمة' : adhanAudioLabel(session.audio.audioChoice), inline: true },
+            { name: 'الصوت', value: session.audio.audioChoice === 'random' ? '🔀 عشوائي بدون تكرار حتى تنتهي القائمة' : adhanAudioLabel(session.audio.audioChoice), inline: true },
             { name: 'الصوت المرتفع', value: `${Math.round(session.audio.volume * 100)}%`, inline: true },
         )
         .setFooter({ text: 'التغييرات مؤقتة حتى تضغط حفظ.' });

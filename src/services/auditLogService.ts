@@ -94,7 +94,7 @@ const ACTION_LABELS: Record<string, string> = {
     'Salawat settings saved': 'تم حفظ إعدادات الصلاة على النبي ﷺ',
     'Salawat reminder sent': 'تم إرسال تذكير الصلاة على النبي ﷺ',
     'Salawat reminder failed': 'فشل إرسال تذكير الصلاة على النبي ﷺ',
-    'Requests completed; live stream resumed': 'اكتملت طلبات القرآن وعاد البث المباشر',
+    'Requests completed; live stream resumed': 'اكتملت طلبات القرآن وعاد البث الملكير',
     'Friday Surat Al-Kahf sent': 'تم إرسال بطاقة الجمعة وبدء سورة الكهف',
     'Friday Surat Al-Kahf voice started': 'بدأ تشغيل سورة الكهف في القناة الصوتية',
     'Friday Surat Al-Kahf completed': 'اكتمل تشغيل سورة الكهف وعاد المصدر السابق',

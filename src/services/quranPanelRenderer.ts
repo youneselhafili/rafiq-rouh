@@ -30,10 +30,10 @@ export async function buildControlPanel(
     let modeIcon = '⏸️';
 
     if (state.mode === 'Makkah') {
-        statusText = '📻 بث مباشر: **الحرم المكي**';
+        statusText = '📻 بث ملكير: **الحرم المكي**';
         modeIcon = '🕋';
     } else if (state.mode === 'Madinah') {
-        statusText = '📻 بث مباشر: **المسجد النبوي**';
+        statusText = '📻 بث ملكير: **المسجد النبوي**';
         modeIcon = '🕌';
     } else if (state.mode === 'Radio' && state.radioLabel) {
         statusText = `📻 **${state.radioLabel}**`;

@@ -34,6 +34,7 @@ interface ActivePlayback extends PlaybackSnapshot {
     nextOverride?: number;
     stopped: boolean;
     paused: boolean;
+    recovering?: boolean;
     transcoder?: ChildProcess;
 }
 
@@ -181,6 +182,7 @@ function attachConnectionGuards(connection: VoiceConnection, guildId: string): v
             logger.info(`[Voice] ${guildId}: ${oldState.status} -> ${newState.status}`);
         }
         if (newState.status === VoiceConnectionStatus.Ready) clearReconnectTimer(guildId);
+        if (newState.status === VoiceConnectionStatus.Signalling) scheduleVoiceRecovery(guildId, 'signalling', 12_000);
         if (newState.status === VoiceConnectionStatus.Disconnected) scheduleVoiceRecovery(guildId, 'disconnect');
         if (newState.status === VoiceConnectionStatus.Destroyed) clearReconnectTimer(guildId);
     });
@@ -204,7 +206,7 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
         stopTranscoder(existing);
         try { existing.player.stop(); } catch { }
         active.delete(guildId);
-        const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Stop } });
+        const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
         attachConnectionGuards(existing.connection, guildId);
         existing.connection.subscribe(player);
         logger.info(`[Voice] Reusing ready connection in ${channel.id} for source transition.`);
@@ -245,7 +247,7 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
         `Speak=${permissions?.has(PermissionFlagsBits.Speak)}, Connect=${permissions?.has(PermissionFlagsBits.Connect)}, ` +
         `SetStatus=${permissions?.has(PermissionFlagsBits.SetVoiceChannelStatus)}`,
     );
-    const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Stop } });
+    const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
     connection.subscribe(player);
     return { connection, player };
 }
@@ -472,6 +474,21 @@ export async function playTrackQueue(
 
     player.on(AudioPlayerStatus.Idle, () => {
         if (session.stopped) return;
+        if (session.connection.state.status !== VoiceConnectionStatus.Ready) {
+            // The player has no transport. Do not treat this as a broken Quran
+            // source or advance the queue: reconnect, then retry the same surah.
+            if (!session.recovering) {
+                session.recovering = true;
+                logger.warn(`[Voice] ${guildId}: player idle while voice is ${session.connection.state.status}; recovering before retrying the same surah.`);
+                scheduleVoiceRecovery(guildId, 'player_idle_connection', 1_500);
+                const retry = setTimeout(() => {
+                    session.recovering = false;
+                    void playIndex();
+                }, 12_000);
+                retry.unref?.();
+            }
+            return;
+        }
         const override = session.nextOverride;
         const elapsed = playbackStartedAt ? Date.now() - playbackStartedAt : 0;
         if (override === undefined && elapsed < minimumHealthyPlaybackMs && registerFailure() <= 2) {
@@ -493,8 +510,21 @@ export async function playTrackQueue(
         }
         playIndex();
     });
-    player.on('error', () => {
+    player.on('error', error => {
         if (session.stopped) return;
+        logger.warn(`[Voice] ${guildId}: audio player error on ${session.tracks![session.index]?.title || 'current track'}: ${error instanceof Error ? error.message : String(error)}`);
+        if (session.connection.state.status !== VoiceConnectionStatus.Ready) {
+            if (!session.recovering) {
+                session.recovering = true;
+                scheduleVoiceRecovery(guildId, 'player_error_connection', 1_500);
+                const retry = setTimeout(() => {
+                    session.recovering = false;
+                    void playIndex();
+                }, 12_000);
+                retry.unref?.();
+            }
+            return;
+        }
         // A transient stream/FFmpeg error should not skip the current surah:
         // retry the same track a couple of times before advancing.
         session.nextOverride = registerFailure() > 2 ? session.index + 1 : session.index;

@@ -217,7 +217,7 @@ function mergeConfig(data: any = {}): UserDMConfig {
         adhkarConfig: {
             ...DEFAULT_DM_CONFIG.adhkarConfig,
             ...(data.adhkarConfig || {}),
-            enabled: data.adhkarConfig?.enabled ?? ADHKAR_KEYS.some(key => legacy[key]),
+            enabled: data.adhkarConfig?.enabled ?? (Object.values(data.adhkarConfig?.categories || {}).some(value => value === true) || ADHKAR_KEYS.some(key => legacy[key])),
             categories: { ...DEFAULT_DM_CONFIG.adhkarConfig.categories, ...legacy, ...(data.adhkarConfig?.categories || {}) },
         },
         salawatConfig: { ...DEFAULT_DM_CONFIG.salawatConfig, ...(data.salawatConfig || {}), enabled: data.salawatConfig?.enabled ?? legacy.salawat, fixedTimes: Array.isArray(data.salawatConfig?.fixedTimes) ? data.salawatConfig.fixedTimes : [] },
@@ -240,7 +240,7 @@ function mergeConfig(data: any = {}): UserDMConfig {
 function flattenConfig(config: UserDMConfig): Record<string, any> {
     const next: UserDMConfig = mergeConfig(config);
     next.adhanConfig.enabled = next.adhan;
-    next.adhkarConfig.enabled = ADHKAR_KEYS.some(key => next.adhkarConfig.categories[key]);
+    next.adhkarConfig.enabled = Object.values(next.adhkarConfig.categories).some(value => value === true);
     next.salawatConfig.enabled = next.salawat;
     next.jumuahConfig.enabled = next.jumuah;
     next.city = next.city || next.adhan_zone;
@@ -361,7 +361,7 @@ export async function getAllDMUserConfigs(): Promise<Array<{ userId: string; con
     return [...byUser].map(([userId, config]) => ({ userId, config }));
 }
 
-export async function getSubscribedUsers(feature: keyof UserDMSubscriptions, filterZone?: string): Promise<string[]> {
+export async function getSubscribedUsers(feature: string, filterZone?: string): Promise<string[]> {
     const userIds: string[] = [];
     for (const { userId, config } of await getAllDMUserConfigs()) {
         if (!config.enabled) continue;
@@ -369,7 +369,7 @@ export async function getSubscribedUsers(feature: keyof UserDMSubscriptions, fil
         if (feature === 'adhan') subscribed = config.adhanConfig.enabled;
         else if (feature === 'salawat') subscribed = config.salawatConfig.enabled;
         else if (feature === 'jumuah') subscribed = config.jumuahConfig.enabled;
-        else if (feature in config.adhkarConfig.categories) subscribed = config.adhkarConfig.categories[feature as keyof UserDMConfig['adhkarConfig']['categories']];
+        else if (feature in config.adhkarConfig.categories) subscribed = Boolean((config.adhkarConfig.categories as Record<string, boolean>)[feature]);
         else subscribed = (config as any)[feature] === true;
 
         if (!subscribed) continue;

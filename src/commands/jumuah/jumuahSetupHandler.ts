@@ -1,4 +1,4 @@
-﻿import moment from 'moment-timezone';
+import moment from 'moment-timezone';
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder,
     ModalBuilder, TextInputBuilder, TextInputStyle,
@@ -37,6 +37,12 @@ export async function handleJumuahSetupInteraction(interaction: any) {
         session.time = time;
         if (interaction.isFromMessage?.()) await interaction.update(buildJumuahSetupPayload(session));
         else await interaction.reply({ content: '✅ تم تحديث الموعد مؤقتاً. اضغط **حفظ** لتطبيقه.', flags: 64 });
+        return;
+    }
+
+    if (interaction.isChannelSelectMenu?.() && interaction.customId === 'jumuah_setup_channel') {
+        session.channelId = interaction.values[0];
+        await interaction.update(buildJumuahSetupPayload(session));
         return;
     }
 
@@ -97,7 +103,7 @@ export async function handleJumuahSetupInteraction(interaction: any) {
             new ButtonBuilder().setCustomId('jumuah_setup_confirm_delete').setLabel('نعم، احذف').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('jumuah_setup_cancel_delete').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
         );
-        await interaction.reply({ content: '⚠️ واش متأكد بغيتي تحذف إعداد الجمعة وتوقفه؟ التأكيد صالح لدقيقتين.', components: [row], flags: 64 });
+        await interaction.reply({ content: '⚠️ واش متأكد أردت تحذف إعداد الجمعة وتوقفه؟ التأكيد صالح لدقيقتين.', components: [row], flags: 64 });
         return;
     }
     if (id === 'jumuah_setup_cancel_delete') {
@@ -120,11 +126,9 @@ export async function handleJumuahSetupInteraction(interaction: any) {
         return;
     }
     if (id === 'jumuah_setup_save') {
-        const adhkar = await getAdhkarV2Config(session.guildId);
-        session.channelId = adhkar?.generalChannelId;
         if (!session.channelId) {
             await interaction.reply({
-                content: '❌ خاصك تكمل إعداد `/setup_adhkar` وتختار القناة العامة أولاً؛ نظام الجمعة مرتبط بنفس القناة.',
+                content: '❌ اختار قناة إرسال الجمعة أولاً.',
                 flags: 64,
             });
             return;
@@ -158,7 +162,7 @@ export async function handleJumuahSetupInteraction(interaction: any) {
                     .setColor(0x57f287)
                     .setTitle('✅ تم حفظ نظام يوم الجمعة')
                     .setDescription(
-                        `**القناة:** <#${session.channelId}> (نفس قناة الأذكار)\n` +
+                        `**القناة:** <#${session.channelId}>\n` +
                         `**الموعد:** الجمعة \`${session.time}\` — \`${session.timezone}\`\n` +
                         `**الحالة:** ${session.enabled ? '✅ مفعّل' : '⏸️ متوقف'}\n` +
                         `**صوت سورة الكهف:** ${session.playKahfVoice ? '✅' : '❌'}\n` +

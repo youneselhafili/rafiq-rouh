@@ -49,7 +49,7 @@ export async function getAllJumuahV2Guilds(): Promise<Array<{ guildId: string; c
     for (const entry of await getAllAdhkarV2Guilds()) {
         const config = await getJumuahV2Config(entry.guildId);
         if (!config || config.deleted) continue;
-        const channelId = entry.config.generalChannelId || config.channelId;
+        const channelId = config.channelId || entry.config.generalChannelId;
         result.push({ guildId: entry.guildId, config: { ...config, channelId } });
     }
     return result;

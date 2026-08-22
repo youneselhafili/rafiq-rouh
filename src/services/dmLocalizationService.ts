@@ -21,13 +21,13 @@ const UI_TEXT: Record<string, Record<DMLanguage, string>> = {
     },
     salawat_dm: {
         ar: 'رسالة خاصة بالصلاة على النبي ﷺ',
-        darija: 'رسالة ديال الصلاة على النبي ﷺ',
+        darija: 'رسالة الخاصة بـ الصلاة على النبي ﷺ',
         en: 'Private Salawat reminder ﷺ',
         fr: 'Rappel privé de salawat ﷺ',
     },
     jumuah_dm: {
         ar: 'رسالة خاصة بيوم الجمعة',
-        darija: 'رسالة ديال نهار الجمعة',
+        darija: 'رسالة الخاصة بـ نهار الجمعة',
         en: 'Private Friday reminder',
         fr: 'Rappel privé du vendredi',
     },

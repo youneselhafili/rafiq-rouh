@@ -275,7 +275,7 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
             new ButtonBuilder().setCustomId('khatma_setup_confirm_delete').setLabel('نعم، احذف').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('khatma_setup_cancel_delete').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
         );
-        await interaction.reply({ content: '⚠️ واش متأكد بغيتي تحذف إعداد الختمة وتوقفه؟ التأكيد صالح لدقيقتين.', components: [row], flags: 64 });
+        await interaction.reply({ content: '⚠️ واش متأكد أردت تحذف إعداد الختمة وتوقفه؟ التأكيد صالح لدقيقتين.', components: [row], flags: 64 });
         return;
     }
 
@@ -316,7 +316,7 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
 
     if (id === 'khatma_setup_save') {
         if (session.scope === 'guild' && !session.channelId) {
-            await interaction.reply({ content: '❌ خاصك تختار القناة التي تُرسل فيها صفحات الختمة أولا.', flags: 64 });
+            await interaction.reply({ content: '❌ يجب أن تختار القناة التي تُرسل فيها صفحات الختمة أولا.', flags: 64 });
             return;
         }
         await interaction.deferUpdate();

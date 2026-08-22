@@ -308,7 +308,7 @@ export function buildPublicPersonalKhatmaPanel() {
         )
         .setFooter({ text: 'اضغط «استلم ورد اليوم» في أي وقت لمتابعة القراءة من آخر صفحة.' });
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId('personal_khatma_config').setLabel('إعداد ختمتي').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('personal_khatma_config').setLabel('تعديل وردي').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('personal_khatma_read').setLabel('استلم ورد اليوم').setEmoji('📖').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('personal_khatma_choose_surah').setLabel('قراءة سورة').setEmoji('📖').setStyle(ButtonStyle.Secondary),
     );
@@ -597,6 +597,22 @@ export async function handlePersonalKhatmaInteraction(interaction: PersonalInter
         return;
     }
     if (id === 'personal_khatma_delete') {
+        const confirmation = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId('personal_khatma_delete_confirm').setLabel('نعم، احذف وردي').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('personal_khatma_delete_cancel').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
+        );
+        await interaction.update({
+            content: '⚠️ واش متأكد أردت تحذف وردك اليومي؟ سوف يتحذف التقدم والخطة الخاصة بك فهاد السيرفر فقط، ومايمكنش نرجعوهم.',
+            embeds: [],
+            components: [confirmation],
+        });
+        return;
+    }
+    if (id === 'personal_khatma_delete_cancel') {
+        await interaction.update(buildSetupPayload(session));
+        return;
+    }
+    if (id === 'personal_khatma_delete_confirm') {
         await deletePersonalGuildKhatma(interaction.guildId, interaction.user.id);
         await syncSubscriberRole(interaction, false);
         setupSessions.delete(key);

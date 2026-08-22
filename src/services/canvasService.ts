@@ -458,7 +458,7 @@ export async function generateQuranLiveImage(reciterName: string, isLive: boolea
     if (isLive) {
         ctx.fillStyle = '#ef4444';
         ctx.font = 'bold 30px Tajawal-Bold, NotoEmoji';
-        ctx.fillText('🔴 بث مباشر', CANVAS_WIDTH / 2, 400);
+        ctx.fillText('🔴 بث ملكير', CANVAS_WIDTH / 2, 400);
     }
 
     return canvas.toBuffer('image/png');

@@ -1,4 +1,4 @@
-﻿import {
+import {
     Client,
     TextChannel,
     EmbedBuilder,
@@ -291,7 +291,7 @@ function buildDonateEmbed(client: Client, title: string): EmbedBuilder {
             {
                 name: '🤍  طرق التبرع المتاحة',
                 value: 
-                    `💳 **عبر PayPal:**\nاضغط على الزر بالأسفل للانتقال لصفحة الدفع مباشرة.\n\n` +
+                    `💳 **عبر PayPal:**\nاضغط على الزر بالأسفل للانتقال لصفحة الدفع ملكيرة.\n\n` +
                     `🏦 **عبر تحويل بنكي (CIH Bank):**\n` +
                     `• **الاسم:** YOUNES ELHAFILI\n` +
                     `• **رقم الحساب (RIB):**\n\`${CIH_RIB}\``,

@@ -56,7 +56,7 @@ export function buildSalawatSetupPayload(session: SalawatSetupSession) {
         ? `كل ${session.intervalHours === 1 ? 'ساعة' : `${session.intervalHours} ساعات`} ابتداءً من لحظة الحفظ`
         : session.fixedTimes.length ? session.fixedTimes.map(time => `\`${time}\``).join('، ') : 'لم يتم تحديد أوقات ثابتة';
     const embed = new EmbedBuilder().setColor(UI_COLORS.BRAND).setTitle('ﷺ إعداد الصلاة على النبي')
-        .setDescription('الصيغ تُقرأ من `data/raw/salawat.txt` وتدور عشوائياً بلا تكرار حتى تنتهي اللائحة. لا يتم تطبيق أي تغيير قبل الحفظ.')
+        .setDescription('الصيغ تُقرأ من `data/raw/salawat.txt` وتدور عشوائياً بدون تكرار حتى تنتهي اللائحة. لا يتم تطبيق أي تغيير قبل الحفظ.')
         .addFields(
             { name: 'الحالة', value: session.enabled ? '✅ مفعلة' : '⏸️ متوقفة', inline: true },
             { name: 'القناة', value: session.channelId ? `<#${session.channelId}>` : 'لم يتم الاختيار', inline: true },

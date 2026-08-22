@@ -13,6 +13,7 @@ import {
     SlashCommandBuilder,
 } from 'discord.js';
 import { getUserDMConfig, updateUserDMConfig } from '../../services/dmSubscriptionService';
+import { getModuleConfig, setModuleConfig } from '../../services/guildConfigService';
 import { DM_PANEL_FOOTER, renderPanelEmbed, UI_COLORS } from '../../utils/uiRenderer';
 import { logger } from '../../utils/logger';
 import { buildDMPanelPayload } from './dmPanelHandler';
@@ -166,6 +167,8 @@ export async function handleDMSetupInteraction(interaction: ButtonInteraction | 
 
         const iconURL = interaction.client.user?.displayAvatarURL({ extension: 'png', size: 128 });
         await channel.send(buildDMIntroPayload(false, iconURL));
+        const current = await getModuleConfig<Record<string, unknown>>(interaction.guildId!, 'serverConfig') || {};
+        await setModuleConfig(interaction.guildId!, 'serverConfig', { ...current, dmPanelChannelId: channelId });
         await interaction.editReply("✅ تم نشر لوحة الرسائل الخاصة في" + ' <#' + channelId + '> ' + ". أي عضو يضغط **فتح الرسائل الخاصة** سيحصل على لوحة إعداداته الخاصة.");
     }
 }

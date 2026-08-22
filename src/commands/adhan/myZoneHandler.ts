@@ -116,7 +116,7 @@ export async function handleMyZoneInteraction(interaction: MessageComponentInter
             new ButtonBuilder().setCustomId('myzone_cancel_delete').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
         );
         await interaction.reply({
-            content: `⚠️ واش متأكد بغيتي تحذف **${zone.city}**؟ التأكيد صالح لمدة دقيقتين.`,
+            content: `⚠️ واش متأكد أردت تحذف **${zone.city}**؟ التأكيد صالح لمدة دقيقتين.`,
             components: [row],
             flags: 64,
         });
@@ -147,7 +147,7 @@ export async function handleMyZoneInteraction(interaction: MessageComponentInter
                 : result.reason === 'missing_permissions'
                     ? 'البوت محتاج Connect وSpeak.'
                     : result.reason === 'adhan_in_progress'
-                        ? 'كاين أذان خدام دابا؛ تسنّى حتى يسالي ثم عاود التجربة.'
+                        ? 'كاين أذان خدام الآن؛ تسنّى حتى يسالي ثم عاود التجربة.'
                         : 'ملف الأذان غير موجود.';
             await interaction.editReply(`❌ ${reason}`);
             return;

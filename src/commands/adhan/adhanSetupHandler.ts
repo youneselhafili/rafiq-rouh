@@ -147,7 +147,7 @@ export async function handleAdhanSetupInteraction(interaction: any) {
                 admin_not_in_voice: '❌ ادخل إلى قناة صوتية أولاً.',
                 missing_permissions: '❌ البوت لا يملك صلاحيات Connect وSpeak في قناتك.',
                 audio_missing: '❌ لم يتم العثور على ملفات الأذان.',
-                adhan_in_progress: '🕌 كاين أذان خدام دابا؛ تسنّى حتى يسالي ثم عاود التجربة.',
+                adhan_in_progress: '🕌 كاين أذان خدام الآن؛ تسنّى حتى يسالي ثم عاود التجربة.',
             };
             await interaction.editReply(messages[result.reason || ''] || '❌ تعذر تشغيل تجربة الأذان.');
             return;
