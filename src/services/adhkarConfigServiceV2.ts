@@ -17,6 +17,9 @@ export interface AdhkarV2Config {
 
 const MODULE = 'adhkarV2';
 const FRIDAY_ADHKAR = 'أذكار يوم الجمعة';
+// Firestore reserves field names beginning and ending with double underscores.
+const LEGACY_MARKER = '__adhkar_v2__';
+const FIRESTORE_MARKER = 'adhkar_v2_marker';
 
 function reconcileCategoryConfig(config: AdhkarV2Config): boolean {
     // The catalog is the source of truth. New categories start paused: users must
@@ -55,7 +58,7 @@ export async function getAdhkarV2Config(guildId: string): Promise<AdhkarV2Config
         primaryZoneCountry: primary.country,
         primaryZoneCity: primary.city,
         categories: {
-            ...Object.fromEntries(legacy.filter(item => item.type !== '__adhkar_v2__').map(item => [item.type, 'enabled'])),
+            ...Object.fromEntries(legacy.filter(item => item.type !== LEGACY_MARKER && item.type !== FIRESTORE_MARKER).map(item => [item.type, 'enabled'])),
             [FRIDAY_ADHKAR]: 'enabled',
         },
     };
@@ -66,7 +69,7 @@ export async function getAdhkarV2Config(guildId: string): Promise<AdhkarV2Config
 export async function saveAdhkarV2Config(guildId: string, config: AdhkarV2Config): Promise<void> {
     await setAdvancedConfig(guildId, MODULE, config);
     await deleteAllGuildAdhkarConfigs(guildId);
-    await saveAdhkarConfig(guildId, '__adhkar_v2__', config.generalChannelId, '');
+    await saveAdhkarConfig(guildId, FIRESTORE_MARKER, config.generalChannelId, '');
 }
 
 export async function getAllAdhkarV2Guilds(): Promise<Array<{ guildId: string; config: AdhkarV2Config }>> {
