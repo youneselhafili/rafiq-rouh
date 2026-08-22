@@ -36,6 +36,7 @@ import {
 } from './personalGuildKhatmaService';
 import { getPersonalKhatmaPanel } from './personalGuildKhatmaService';
 import { getQuranRadioConfig } from './guildService';
+import { getLogsConfig } from './auditLogService';
 import { logger } from '../utils/logger';
 import { buildDMIntroPayload } from '../commands/dm/setupDm';
 
@@ -878,7 +879,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
     if (resource === 'roles' && method === 'GET') { json(response, 200, { roles: await listRoles(guild) }); return true; }
     if (resource === 'config' && method === 'GET') {
         const canManage = await canManageGuild(guild, session.user.id);
-        const [storedConfig, adhkarConfig, jumuahConfig, khatma, salawatConfig, adhanZones, quranConfig, personalKhatmaPanel] = await Promise.all([
+        const [storedConfig, adhkarConfig, jumuahConfig, khatma, salawatConfig, adhanZones, quranConfig, personalKhatmaPanel, logsConfig] = await Promise.all([
             getModuleConfig<ServerConfig>(guild.id, 'serverConfig'),
             getAdhkarV2Config(guild.id),
             getJumuahV2Config(guild.id),
@@ -887,6 +888,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
             getManagedAdhanZones(guild.id),
             getQuranRadioConfig(guild.id),
             getPersonalKhatmaPanel(guild.id),
+            getLogsConfig(guild.id),
         ]);
         const config: ServerConfig = { ...(storedConfig || {}) };
         if (canManage && !config.dmPanelChannelId) {
@@ -911,6 +913,9 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         }
         if (khatma?.channelId) (config as any).khatmaChannelId = khatma.channelId;
         if (personalKhatmaPanel?.channelId) (config as any).personalKhatmaChannelId = personalKhatmaPanel.channelId;
+        // Logs are stored in their own live module, not the dashboard snapshot.
+        // Mirror the active channel here so the UI can always show its name and ID.
+        if (logsConfig.channelId) config.logsChannelId = logsConfig.channelId;
         const roles = await getModuleConfig<any>(guild.id, 'roles') || {};
         const adhkarEnabled = Object.values(adhkarConfig?.categories || {}).filter(status => status === 'enabled').length;
         const configuredChannels = Object.values(config).filter(value => typeof value === 'string' && value.length > 0).length;
