@@ -16,11 +16,15 @@ function resolveFontPath(filename: string): string {
 const cairoFontPath = resolveFontPath('Cairo-Bold.ttf');
 const tajawalRegPath = resolveFontPath('Tajawal-Regular.ttf');
 const tajawalBoldPath = resolveFontPath('Tajawal-Bold.ttf');
+const notoNaskhArabicPath = resolveFontPath('NotoNaskhArabic-Regular.ttf');
 const notoEmojiPath = resolveFontPath('NotoEmoji-Regular.ttf');
 
 if (fs.existsSync(cairoFontPath)) GlobalFonts.registerFromPath(cairoFontPath, 'Cairo');
 if (fs.existsSync(tajawalRegPath)) GlobalFonts.registerFromPath(tajawalRegPath, 'Tajawal');
 if (fs.existsSync(tajawalBoldPath)) GlobalFonts.registerFromPath(tajawalBoldPath, 'Tajawal-Bold');
+// Tajawal does not include every Arabic presentation glyph (notably ﷺ).
+// Keep this bundled fallback so Canvas rendering is identical on every host.
+if (fs.existsSync(notoNaskhArabicPath)) GlobalFonts.registerFromPath(notoNaskhArabicPath, 'NotoNaskhArabic');
 if (fs.existsSync(notoEmojiPath)) GlobalFonts.registerFromPath(notoEmojiPath, 'NotoEmoji');
 
 const CANVAS_WIDTH = 1200;
@@ -535,11 +539,11 @@ export async function generateSalawatImage(text: string = 'اللهم صل وس�
     ctx.textBaseline = 'middle';
 
     ctx.fillStyle = '#4CAF50';
-    ctx.font = '50px Tajawal-Bold, Cairo, NotoEmoji';
+    ctx.font = '50px Tajawal-Bold, NotoNaskhArabic, Cairo, NotoEmoji';
     ctx.fillText('صلوا على النبي ﷺ', CANVAS_WIDTH / 2, 180);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '42px Tajawal, NotoEmoji';
+    ctx.font = '42px Tajawal, NotoNaskhArabic, NotoEmoji';
     const lines = wrapText(ctx, text, CANVAS_WIDTH - 250);
     const lineHeight = 60;
 

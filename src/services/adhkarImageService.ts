@@ -22,9 +22,11 @@ function resolveFontPath(filename: string): string {
 const cairo = resolveFontPath('Cairo-Bold.ttf');
 const tajawal = resolveFontPath('Tajawal-Regular.ttf');
 const tajawalBold = resolveFontPath('Tajawal-Bold.ttf');
+const notoNaskhArabic = resolveFontPath('NotoNaskhArabic-Regular.ttf');
 if (fs.existsSync(cairo)) GlobalFonts.registerFromPath(cairo, 'Cairo');
 if (fs.existsSync(tajawal)) GlobalFonts.registerFromPath(tajawal, 'Tajawal');
 if (fs.existsSync(tajawalBold)) GlobalFonts.registerFromPath(tajawalBold, 'Tajawal-Bold');
+if (fs.existsSync(notoNaskhArabic)) GlobalFonts.registerFromPath(notoNaskhArabic, 'NotoNaskhArabic');
 
 function wrap(ctx: any, text: string, maxWidth: number): string[] {
     const paragraphs = text.split(/\n+/).filter(Boolean);
@@ -43,13 +45,13 @@ function wrap(ctx: any, text: string, maxWidth: number): string[] {
 }
 
 function fits(ctx: any, text: string, fontSize: number): boolean {
-    ctx.font = `${fontSize}px Tajawal`;
+    ctx.font = `${fontSize}px Tajawal, NotoNaskhArabic`;
     const lines = wrap(ctx, text, MAX_TEXT_WIDTH);
     return lines.length * Math.round(fontSize * 1.42) <= TEXT_BOTTOM - TEXT_TOP;
 }
 
 function splitLongUnit(ctx: any, unit: string): string[] {
-    ctx.font = `${MIN_FONT}px Tajawal`;
+    ctx.font = `${MIN_FONT}px Tajawal, NotoNaskhArabic`;
     const maxLines = Math.floor((TEXT_BOTTOM - TEXT_TOP) / Math.round(MIN_FONT * 1.42));
     const lines = wrap(ctx, unit, MAX_TEXT_WIDTH);
     const pages: string[] = [];
@@ -99,11 +101,11 @@ function renderPage(text: string, title: string, page: number, total: number, so
     ctx.textBaseline = 'middle';
     ctx.direction = 'rtl';
     ctx.fillStyle = '#67d18a';
-    ctx.font = '42px Tajawal-Bold, Cairo';
+    ctx.font = '42px Tajawal-Bold, NotoNaskhArabic, Cairo';
     ctx.fillText(title, WIDTH / 2, 105);
     let fontSize = MAX_FONT;
     while (fontSize > MIN_FONT && !fits(ctx, text, fontSize)) fontSize -= 2;
-    ctx.font = `${fontSize}px Tajawal`;
+    ctx.font = `${fontSize}px Tajawal, NotoNaskhArabic`;
     ctx.fillStyle = '#ffffff';
     const lines = wrap(ctx, text, MAX_TEXT_WIDTH);
     const lineHeight = Math.round(fontSize * 1.42);
@@ -112,7 +114,7 @@ function renderPage(text: string, title: string, page: number, total: number, so
     for (const line of lines) { ctx.fillText(line, WIDTH / 2, y, MAX_TEXT_WIDTH); y += lineHeight; }
     const details = [count && count > 1 ? `التكرار: ${count}` : '', source ? source : '', total > 1 ? `الصفحة ${page}/${total}` : ''].filter(Boolean).join('  •  ');
     ctx.fillStyle = '#b9d8c4';
-    ctx.font = '24px Tajawal';
+    ctx.font = '24px Tajawal, NotoNaskhArabic';
     ctx.fillText(details || 'رفيق الروح', WIDTH / 2, 570, MAX_TEXT_WIDTH);
     return canvas.toBuffer('image/png');
 }
@@ -141,7 +143,7 @@ export function generateNamesGridImage(names: string[], page: number, totalPages
     ctx.textBaseline = 'middle';
     ctx.direction = 'rtl';
     ctx.fillStyle = '#67d18a';
-    ctx.font = '42px Tajawal-Bold, Cairo';
+    ctx.font = '42px Tajawal-Bold, NotoNaskhArabic, Cairo';
     ctx.fillText('أسماء الله الحسنى', WIDTH / 2, 92);
     const cellWidth = 300;
     const cellHeight = 115;
@@ -158,11 +160,11 @@ export function generateNamesGridImage(names: string[], page: number, totalPages
         ctx.fillRect(x, y, cellWidth - 20, cellHeight - 18);
         ctx.strokeRect(x, y, cellWidth - 20, cellHeight - 18);
         ctx.fillStyle = '#ffffff';
-        ctx.font = '38px Tajawal-Bold, Cairo';
+        ctx.font = '38px Tajawal-Bold, NotoNaskhArabic, Cairo';
         ctx.fillText(name, x + (cellWidth - 20) / 2, y + (cellHeight - 18) / 2, cellWidth - 40);
     });
     ctx.fillStyle = '#b9d8c4';
-    ctx.font = '24px Tajawal';
+    ctx.font = '24px Tajawal, NotoNaskhArabic';
     ctx.fillText(`9 أسماء في كل مرة • المجموعة ${page}/${totalPages}`, WIDTH / 2, 565);
     return canvas.toBuffer('image/png');
 }
