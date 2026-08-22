@@ -103,7 +103,7 @@ export async function handleJumuahSetupInteraction(interaction: any) {
             new ButtonBuilder().setCustomId('jumuah_setup_confirm_delete').setLabel('نعم، احذف').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('jumuah_setup_cancel_delete').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
         );
-        await interaction.reply({ content: '⚠️ واش متأكد أردت تحذف إعداد الجمعة وتوقفه؟ التأكيد صالح لدقيقتين.', components: [row], flags: 64 });
+        await interaction.reply({ content: '⚠️ هل أنت متأكد من حذف إعداد الجمعة وإيقافه؟ التأكيد صالح لمدة دقيقتين.', components: [row], flags: 64 });
         return;
     }
     if (id === 'jumuah_setup_cancel_delete') {

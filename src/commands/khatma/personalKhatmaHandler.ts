@@ -602,7 +602,7 @@ export async function handlePersonalKhatmaInteraction(interaction: PersonalInter
             new ButtonBuilder().setCustomId('personal_khatma_delete_cancel').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
         );
         await interaction.update({
-            content: '⚠️ واش متأكد أردت تحذف وردك اليومي؟ سوف يتحذف التقدم والخطة الخاصة بك فهاد السيرفر فقط، ومايمكنش نرجعوهم.',
+            content: '⚠️ هل أنت متأكد من حذف وردك اليومي؟ سيُحذف التقدم والخطة الخاصة بك من هذا السيرفر فقط، ولا يمكن استعادتهما.',
             embeds: [],
             components: [confirmation],
         });

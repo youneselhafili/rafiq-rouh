@@ -270,7 +270,7 @@ export async function handleTestInteraction(interaction: MessageComponentInterac
                 new ButtonBuilder().setCustomId('test_cmd_confirm_voice').setLabel('تأكيد تشغيل الأذان كاملاً').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('test_cmd_cancel_live').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
             );
-            await interaction.reply({ content: '⚠️ هذا اختبار حي: سيوقف الصوت الحالي مؤقتاً، يشغل الأذان كاملاً في قناتك، ثم يرجع الصوت السابق. واش متأكد؟', components: [row], flags: 64 });
+            await interaction.reply({ content: '⚠️ هذا اختبار حي: سيوقف الصوت الحالي مؤقتاً، ويشغّل الأذان كاملاً في قناتك، ثم يعيد الصوت السابق. هل أنت متأكد؟', components: [row], flags: 64 });
             return;
         }
         if (id === 'test_cmd_confirm_voice') {

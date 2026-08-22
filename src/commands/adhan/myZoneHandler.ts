@@ -116,7 +116,7 @@ export async function handleMyZoneInteraction(interaction: MessageComponentInter
             new ButtonBuilder().setCustomId('myzone_cancel_delete').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
         );
         await interaction.reply({
-            content: `⚠️ واش متأكد أردت تحذف **${zone.city}**؟ التأكيد صالح لمدة دقيقتين.`,
+            content: `⚠️ هل أنت متأكد من حذف **${zone.city}**؟ التأكيد صالح لمدة دقيقتين.`,
             components: [row],
             flags: 64,
         });

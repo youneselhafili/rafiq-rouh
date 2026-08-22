@@ -934,7 +934,7 @@ async function playlistDecisionView(interaction: any, state: QuranRuntimeState) 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
             .setCustomId('qr_saved_resume')
-            .setLabel('كمل من فين وقفتي')
+            .setLabel('تابع من حيث توقفت')
             .setEmoji('▶️')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()

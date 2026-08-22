@@ -275,7 +275,7 @@ export async function handleKhatmaSetupInteraction(interaction: any) {
             new ButtonBuilder().setCustomId('khatma_setup_confirm_delete').setLabel('نعم، احذف').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('khatma_setup_cancel_delete').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
         );
-        await interaction.reply({ content: '⚠️ واش متأكد أردت تحذف إعداد الختمة وتوقفه؟ التأكيد صالح لدقيقتين.', components: [row], flags: 64 });
+        await interaction.reply({ content: '⚠️ هل أنت متأكد من حذف إعداد الختمة وإيقافه؟ التأكيد صالح لمدة دقيقتين.', components: [row], flags: 64 });
         return;
     }
 

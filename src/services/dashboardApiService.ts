@@ -765,7 +765,17 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         });
         return true;
     }
-    if (url.pathname === '/api/me/wird/dm' && method === 'PUT') {
+    if (url.pathname === '/api/me/wird/dm' && ['PUT', 'DELETE'].includes(method)) {
+        if (method === 'DELETE') {
+            await updateUserDMConfig(session.user.id, { khatma: undefined });
+            const guilds = await visibleGuilds(client, session);
+            const personalGuilds = await Promise.all(guilds.map(async guild => {
+                const config = await getPersonalGuildKhatma(guild.id, session.user.id);
+                return { ...guild, config, progress: personalWirdProgress(config) };
+            }));
+            json(response, 200, { user: { id: session.user.id, username: session.user.username, globalName: session.user.globalName, avatarUrl: avatarUrl(session.user) }, dm: { config: null, progress: null }, guilds: personalGuilds });
+            return true;
+        }
         const body = await bodyJson(request);
         const current = await getUserDMConfig(session.user.id);
         const next = cleanPersonalWird(body, 'dm', session.user.id, current.khatma ? {
