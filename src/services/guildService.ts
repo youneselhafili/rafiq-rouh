@@ -84,6 +84,10 @@ export async function saveAdhkarConfig(
     city?: string,
     country?: string,
 ): Promise<void> {
+    if (type.startsWith('__') && type.endsWith('__')) {
+        logger.warn(`Ignored reserved adhkar config type for guild ${guildId}.`);
+        return;
+    }
     if (isFirestoreAvailable()) {
         const doc = await getModuleConfig<AdhkarConfigDoc>(guildId, 'adhkarConfig');
         const existingTypes = doc?.types || [];

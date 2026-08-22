@@ -82,6 +82,18 @@ function hydrateLegacyModules(record: LocalGuildRecord): void {
     if (record.donateConfig === undefined && record.donate) {
         record.donateConfig = { ...record.donate, enabled: record.donate.enabled !== false };
     }
+    // Firestore rejects any nested field whose name starts and ends with "__".
+    // Older local adhkar records could still contain the removed __adhkar_v2__
+    // marker in `types`/`times`; clean it before a pending local sync reaches
+    // Firestore so an old file cannot keep the whole Firebase connection failing.
+    if (record.adhkarConfig && typeof record.adhkarConfig === 'object') {
+        const config = record.adhkarConfig;
+        const unsafe = (key: string) => key.startsWith('__') && key.endsWith('__');
+        if (Array.isArray(config.types)) config.types = config.types.filter((type: unknown) => typeof type === 'string' && !unsafe(type));
+        if (config.times && typeof config.times === 'object') {
+            config.times = Object.fromEntries(Object.entries(config.times).filter(([key]) => !unsafe(key)));
+        }
+    }
 }
 
 function writeLocalGuild(guildId: string, record: LocalGuildRecord): void {
@@ -94,7 +106,9 @@ function writeLocalGuild(guildId: string, record: LocalGuildRecord): void {
 function mirrorLegacyShape(record: LocalGuildRecord, moduleName: string, value: any): void {
     if (moduleName === 'adhkarConfig') {
         record.adhkar = value?.enabled
-            ? (value.types || []).map((type: string) => ({ type, channelId: value.channelId, time: value.times?.[type] || '' }))
+            ? (value.types || [])
+                .filter((type: string) => !(type.startsWith('__') && type.endsWith('__')))
+                .map((type: string) => ({ type, channelId: value.channelId, time: value.times?.[type] || '' }))
             : [];
     } else if (moduleName === 'adhanConfig') {
         record.adhan = value?.enabled
