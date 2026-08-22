@@ -641,10 +641,10 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
                 globalName: session.user.globalName,
                 avatarUrl: avatarUrl(session.user),
             },
-            // Server-management dashboards are intentionally limited to servers
-            // where the signed-in member can manage the bot. Shared servers remain
-            // available in the personal daily-wird view through /api/me/overview.
-            guilds: await manageableGuilds(client, session),
+            // Every shared server is visible. The `canManage` flag makes the
+            // dashboard read-only for ordinary members; write endpoints still
+            // require Discord Administrator (or the server owner).
+            guilds: await visibleGuilds(client, session),
             health: { discord: client.isReady() },
         });
         return true;
@@ -667,7 +667,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         return true;
     }
     if (url.pathname === '/api/guilds' && method === 'GET') {
-        json(response, 200, { guilds: await manageableGuilds(client, session) });
+        json(response, 200, { guilds: await visibleGuilds(client, session) });
         return true;
     }
     if (url.pathname === '/api/me/location' && ['GET', 'PUT', 'DELETE'].includes(method)) {
@@ -816,12 +816,16 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
     }
     const adhanZonesMatch = url.pathname.match(/^\/api\/guilds\/(\d+)\/adhan-zones$/);
     if (adhanZonesMatch && ['GET', 'PUT', 'DELETE'].includes(method)) {
-        const guild = await authorizedGuild(client, session, adhanZonesMatch[1]);
+        const guild = method === 'GET'
+            ? await sharedGuild(client, session, adhanZonesMatch[1])
+            : await authorizedGuild(client, session, adhanZonesMatch[1]);
         if (!guild) { json(response, 403, { error: 'guild_access_denied' }); return true; }
         if (method === 'GET') {
+            const canManage = await canManageGuild(guild, session.user.id);
             const channels = await listChannels(guild);
             json(response, 200, {
                 ok: true,
+                readOnly: !canManage,
                 locations: cities.map(city => ({
                     name: city.name,
                     nameEn: city.nameEn,
@@ -864,12 +868,16 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
     const match = url.pathname.match(/^\/api\/guilds\/(\d+)(?:\/(config|channels|roles|test-message|publish-dm))?$/);
     if (!match) { json(response, 404, { error: 'not_found' }); return true; }
     const [, guildId, resource = 'config'] = match;
-    const guild = await authorizedGuild(client, session, guildId);
+    const readOnlyResource = method === 'GET' && (resource === 'config' || resource === 'channels');
+    const guild = readOnlyResource
+        ? await sharedGuild(client, session, guildId)
+        : await authorizedGuild(client, session, guildId);
     if (!guild) { json(response, 403, { error: 'guild_access_denied' }); return true; }
 
     if (resource === 'channels' && method === 'GET') { json(response, 200, { channels: await listChannels(guild) }); return true; }
     if (resource === 'roles' && method === 'GET') { json(response, 200, { roles: await listRoles(guild) }); return true; }
     if (resource === 'config' && method === 'GET') {
+        const canManage = await canManageGuild(guild, session.user.id);
         const [storedConfig, adhkarConfig, jumuahConfig, khatma, salawatConfig, adhanZones, quranConfig, personalKhatmaPanel] = await Promise.all([
             getModuleConfig<ServerConfig>(guild.id, 'serverConfig'),
             getAdhkarV2Config(guild.id),
@@ -881,7 +889,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
             getPersonalKhatmaPanel(guild.id),
         ]);
         const config: ServerConfig = { ...(storedConfig || {}) };
-        if (!config.dmPanelChannelId) {
+        if (canManage && !config.dmPanelChannelId) {
             const discoveredPanelChannel = await discoverDmPanelChannel(guild, client);
             if (discoveredPanelChannel) {
                 config.dmPanelChannelId = discoveredPanelChannel;
@@ -907,8 +915,9 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         const adhkarEnabled = Object.values(adhkarConfig?.categories || {}).filter(status => status === 'enabled').length;
         const configuredChannels = Object.values(config).filter(value => typeof value === 'string' && value.length > 0).length;
         json(response, 200, {
+            readOnly: !canManage,
             config,
-            roles,
+            roles: canManage ? roles : {},
             adhkar: {
                 enabled: adhkarConfig?.enabled ?? false,
                 categories: getAllAdhkarCategoryNames().map(category => ({
