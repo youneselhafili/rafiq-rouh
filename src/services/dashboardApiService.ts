@@ -9,6 +9,7 @@ import {
     Guild,
     GuildMember,
     PermissionFlagsBits,
+    PermissionsBitField,
 } from 'discord.js';
 import { FieldValue } from 'firebase-admin/firestore';
 import {
@@ -239,23 +240,35 @@ async function requireSession(request: IncomingMessage, response: ServerResponse
 }
 
 async function memberFor(guild: Guild, userId: string): Promise<GuildMember | null> {
-    return guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
+    // Permission changes should apply immediately after a role is granted.
+    return await guild.members.fetch({ user: userId, force: true }).catch(() => guild.members.cache.get(userId) || null);
 }
 
-async function canManageGuild(guild: Guild, userId: string): Promise<boolean> {
+async function canManageGuild(guild: Guild, userId: string, oauthGuilds: OAuthGuild[] = []): Promise<boolean> {
     const member = await memberFor(guild, userId);
     if (!member) return false;
-    // Server configuration is sensitive: do not trust the OAuth guild list,
-    // Manage Server, or a dashboard-selected role. Only the server owner or a
-    // member with Discord's Administrator permission may edit server settings.
-    return guild.ownerId === userId || member.permissions.has(PermissionFlagsBits.Administrator);
+    if (guild.ownerId === userId) return true;
+
+    // Refresh the guild roles too, so permissions are evaluated with the
+    // current Discord role definitions rather than a gateway cache snapshot.
+    await guild.roles.fetch().catch(() => null);
+    if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+
+    // Fallback to Discord's signed OAuth guild-permission bitfield, only after
+    // verifying that this user is currently a guild member above.
+    const oauthGuild = oauthGuilds.find(candidate => candidate.id === guild.id);
+    try {
+        return Boolean(oauthGuild && new PermissionsBitField(BigInt(oauthGuild.permissions || '0')).has(PermissionFlagsBits.Administrator));
+    } catch {
+        return false;
+    }
 }
 
 async function manageableGuilds(client: Client, session: DashboardSession) {
     const result = [];
     for (const oauthGuild of session.oauthGuilds) {
         const guild = client.guilds.cache.get(oauthGuild.id);
-        if (!guild || !await canManageGuild(guild, session.user.id)) continue;
+        if (!guild || !await canManageGuild(guild, session.user.id, session.oauthGuilds)) continue;
         result.push({
             id: guild.id,
             name: guild.name,
@@ -270,7 +283,7 @@ async function manageableGuilds(client: Client, session: DashboardSession) {
 async function authorizedGuild(client: Client, session: DashboardSession, guildId: string): Promise<Guild | null> {
     if (!session.oauthGuilds.some(guild => guild.id === guildId)) return null;
     const guild = client.guilds.cache.get(guildId);
-    if (!guild || !await canManageGuild(guild, session.user.id)) return null;
+    if (!guild || !await canManageGuild(guild, session.user.id, session.oauthGuilds)) return null;
     return guild;
 }
 
@@ -822,7 +835,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
             : await authorizedGuild(client, session, adhanZonesMatch[1]);
         if (!guild) { json(response, 403, { error: 'guild_access_denied' }); return true; }
         if (method === 'GET') {
-            const canManage = await canManageGuild(guild, session.user.id);
+            const canManage = await canManageGuild(guild, session.user.id, session.oauthGuilds);
             const channels = await listChannels(guild);
             json(response, 200, {
                 ok: true,
@@ -881,7 +894,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
     if (resource === 'channels' && method === 'GET') { json(response, 200, { channels: await listChannels(guild) }); return true; }
     if (resource === 'roles' && method === 'GET') { json(response, 200, { roles: await listRoles(guild) }); return true; }
     if (resource === 'config' && method === 'GET') {
-        const canManage = await canManageGuild(guild, session.user.id);
+        const canManage = await canManageGuild(guild, session.user.id, session.oauthGuilds);
         const [storedConfig, adhkarConfig, jumuahConfig, khatma, salawatConfig, adhanZones, quranConfig, personalKhatmaPanel, logsConfig] = await Promise.all([
             getModuleConfig<ServerConfig>(guild.id, 'serverConfig'),
             getAdhkarV2Config(guild.id),
