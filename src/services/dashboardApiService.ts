@@ -113,7 +113,10 @@ function cookie(name: string, value: string, options: { maxAge?: number; clear?:
     return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=${sameSite}${secure}${maxAge}`;
 }
 
-const DEFAULT_DASHBOARD_ORIGINS = ['https://rafikk-rouh.web.app'];
+const DEFAULT_DASHBOARD_ORIGINS = [
+    'https://rafikk-rouh.web.app',
+    'https://rafikk-rouh.firebaseapp.com',
+];
 
 function allowedDashboardOrigins(): string[] {
     const extra = env('DASHBOARD_ALLOWED_ORIGIN')
