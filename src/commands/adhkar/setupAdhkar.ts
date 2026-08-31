@@ -12,6 +12,7 @@ export interface AdhkarSetupSession {
     guildId: string;
     enabled: boolean;
     generalChannelId?: string;
+    prayerLinkedChannelId?: string;
     zones: ManagedAdhanZone[];
     primaryZoneIndex: number;
     categories: Record<string, AdhkarCategoryStatus>;
@@ -44,6 +45,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const session: AdhkarSetupSession = {
         guildId: interaction.guildId!, enabled: existing?.enabled ?? true,
         generalChannelId: existing?.generalChannelId, zones, primaryZoneIndex: primaryIndex,
+        prayerLinkedChannelId: existing?.prayerLinkedChannelId || zones[primaryIndex]?.channelId,
         categories, selectedTypes: [], categoryPage: 0, view: 'main',
     };
     activeAdhkarSetups.set(interaction.user.id, session);
@@ -59,13 +61,14 @@ function mainPayload(session: AdhkarSetupSession) {
     const enabledCount = Object.values(session.categories).filter(status => status === 'enabled').length;
     const pausedCount = Object.values(session.categories).filter(status => status === 'paused').length;
     const embed = new EmbedBuilder().setColor(UI_COLORS.BRAND).setTitle('📿 إعداد الأذكار المتقدمة')
-        .setDescription('اختر المنطقة المرجعية والقناة العامة، ثم فعّل الأنواع التي تريدها فقط. لا يرسل البوت أي ذكر متوقف أو غير محدد.')
+        .setDescription('اختر المنطقة المرجعية، القناة العامة، وقناة أدعية الأذان والوضوء، ثم فعّل الأنواع التي تريدها فقط.')
         .addFields(
             { name: 'الحالة العامة', value: session.enabled ? '✅ مفعلة' : '⏸️ متوقفة', inline: true },
             { name: 'المنطقة المرجعية', value: zone ? `${zone.city} — ${zone.country} (\`${zone.timezone}\`)` : 'غير محددة', inline: true },
             { name: 'القناة العامة', value: session.generalChannelId ? `<#${session.generalChannelId}>` : 'لم يتم الاختيار', inline: true },
+            { name: 'قناة أدعية الأذان والوضوء', value: session.prayerLinkedChannelId ? `<#${session.prayerLinkedChannelId}>` : 'تستعمل قناة الأذان', inline: true },
             { name: 'الأنواع', value: `✅ ${enabledCount} مفعلة | ⏸️ ${pausedCount} متوقفة\nلن يصل أي نوع متوقف إلى القنوات.`, inline: false },
-            { name: 'المواعيد والقنوات', value: 'القناة العامة: الصباح 06:00 • المساء 18:00 • الاستيقاظ قبل الفجر بـ30 دقيقة • النوم بعد العشاء بساعة.\nقناة الأذان: أذكار الأذان مع كل صلاة • الوضوء بعد 5 دقائق.\nيوم الجمعة: ذكر واحد من أذكار الجمعة بعد أذكار الصباح. أما بقية الأنواع المفعلة فتوزع بين الصلوات.', inline: false },
+            { name: 'المواعيد والقنوات', value: 'القناة العامة: الصباح 06:00 • المساء 18:00 • الاستيقاظ قبل الفجر بـ30 دقيقة • النوم بعد العشاء بساعة.\nالقناة المخصصة: أذكار الأذان مع كل صلاة • الوضوء بعد 5 دقائق.\nيوم الجمعة: ذكر واحد من أذكار الجمعة بعد أذكار الصباح. أما بقية الأنواع المفعلة فتوزع بين الصلوات.', inline: false },
         )
         .setFooter({ text: 'لا يتم تطبيق أي تغيير قبل الضغط على حفظ.' });
     const zones = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
@@ -76,6 +79,9 @@ function mainPayload(session: AdhkarSetupSession) {
     const channel = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
         new ChannelSelectMenuBuilder().setCustomId('adhkar_setup_channel').setPlaceholder('اختر قناة الأذكار العامة').addChannelTypes(ChannelType.GuildText),
     );
+    const prayerLinkedChannel = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
+        new ChannelSelectMenuBuilder().setCustomId('adhkar_setup_prayer_channel').setPlaceholder('اختر قناة أدعية الأذان والوضوء').addChannelTypes(ChannelType.GuildText),
+    );
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId('adhkar_setup_categories').setLabel('إدارة الأنواع').setEmoji('🗂️').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('adhkar_setup_master_toggle').setLabel(session.enabled ? 'إيقاف الكل' : 'تفعيل الكل').setEmoji(session.enabled ? '⏸️' : '▶️').setStyle(ButtonStyle.Secondary),
@@ -83,7 +89,7 @@ function mainPayload(session: AdhkarSetupSession) {
         new ButtonBuilder().setCustomId('adhkar_setup_save').setLabel('حفظ').setEmoji('💾').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('adhkar_setup_cancel').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
     );
-    return { embeds: [embed], components: [zones, channel, buttons] };
+    return { embeds: [embed], components: [zones, channel, prayerLinkedChannel, buttons] };
 }
 
 function categoryPayload(session: AdhkarSetupSession) {

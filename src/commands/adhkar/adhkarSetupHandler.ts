@@ -15,6 +15,11 @@ export async function handleAdhkarSetupInteraction(interaction: any) {
         await interaction.update(buildAdhkarSetupPayload(session));
         return;
     }
+    if (interaction.isChannelSelectMenu() && interaction.customId === 'adhkar_setup_prayer_channel') {
+        session.prayerLinkedChannelId = interaction.values[0];
+        await interaction.update(buildAdhkarSetupPayload(session));
+        return;
+    }
     if (interaction.isModalSubmit() && interaction.customId === 'adhkar_setup_channel_id_modal') {
         const channelId = interaction.fields.getTextInputValue('channel_id').trim().replace(/[<#>]/g, '');
         if (!/^\d{17,22}$/.test(channelId)) {
@@ -105,16 +110,17 @@ export async function handleAdhkarSetupInteraction(interaction: any) {
     }
     if (id === 'adhkar_setup_save') {
         const zone = session.zones[session.primaryZoneIndex];
-        if (!zone || !session.generalChannelId) {
+        if (!zone || !session.generalChannelId || !session.prayerLinkedChannelId) {
             session.view = 'main';
             await interaction.update(buildAdhkarSetupPayload(session));
-            await interaction.followUp({ content: '❌ اختر المنطقة المرجعية والقناة العامة قبل الحفظ.', flags: 64 });
+            await interaction.followUp({ content: '❌ اختر المنطقة المرجعية، القناة العامة، وقناة أدعية الأذان والوضوء قبل الحفظ.', flags: 64 });
             return;
         }
         await interaction.deferUpdate();
         await saveAdhkarV2Config(session.guildId, {
             enabled: session.enabled,
             generalChannelId: session.generalChannelId,
+            prayerLinkedChannelId: session.prayerLinkedChannelId,
             primaryZoneCountry: zone.country,
             primaryZoneCity: zone.city,
             categories: session.categories,
@@ -123,12 +129,12 @@ export async function handleAdhkarSetupInteraction(interaction: any) {
         await rescheduleAdhkarGuild(interaction.client, session.guildId);
         await sendAuditLog(interaction.client, session.guildId, {
             level: 'info', system: 'Adhkar', action: 'Adhkar settings saved', actorId: interaction.user.id,
-            details: `${session.enabled ? 'مفعل' : 'متوقف'} — ${zone.city} — <#${session.generalChannelId}> — ${Object.values(session.categories).filter(value => value === 'enabled').length} نوع مفعل`,
+            details: `${session.enabled ? 'مفعل' : 'متوقف'} — ${zone.city} — العامة <#${session.generalChannelId}> — أدعية الأذان والوضوء <#${session.prayerLinkedChannelId}> — ${Object.values(session.categories).filter(value => value === 'enabled').length} نوع مفعل`,
         });
         activeAdhkarSetups.delete(interaction.user.id);
         await interaction.editReply({
             embeds: [new EmbedBuilder().setColor(0x57f287).setTitle('✅ تم حفظ نظام الأذكار')
-                .setDescription(`**المنطقة المرجعية:** ${zone.city} — ${zone.country}\n**القناة العامة:** <#${session.generalChannelId}>\n**الحالة:** ${session.enabled ? '✅ مفعلة' : '⏸️ متوقفة'}\n**الأنواع المفعلة:** ${Object.values(session.categories).filter(value => value === 'enabled').length}\n\nلم يتم إرسال أي شيء فور الحفظ؛ سيعمل النظام في مواعيده المحددة.`)],
+                .setDescription(`**المنطقة المرجعية:** ${zone.city} — ${zone.country}\n**القناة العامة:** <#${session.generalChannelId}>\n**أدعية الأذان والوضوء:** <#${session.prayerLinkedChannelId}>\n**الحالة:** ${session.enabled ? '✅ مفعلة' : '⏸️ متوقفة'}\n**الأنواع المفعلة:** ${Object.values(session.categories).filter(value => value === 'enabled').length}\n\nلم يتم إرسال أي شيء فور الحفظ؛ سيعمل النظام في مواعيده المحددة.`)],
             components: [],
         });
     }

@@ -9,6 +9,7 @@ export type AdhkarCategoryStatus = 'enabled' | 'paused';
 export interface AdhkarV2Config {
     enabled: boolean;
     generalChannelId: string;
+    prayerLinkedChannelId?: string;
     primaryZoneCountry: string;
     primaryZoneCity: string;
     categories: Record<string, AdhkarCategoryStatus>;
@@ -55,6 +56,7 @@ export async function getAdhkarV2Config(guildId: string): Promise<AdhkarV2Config
     const migrated: AdhkarV2Config = {
         enabled: true,
         generalChannelId: legacy[0].channelId,
+        prayerLinkedChannelId: primary.channelId,
         primaryZoneCountry: primary.country,
         primaryZoneCity: primary.city,
         categories: {

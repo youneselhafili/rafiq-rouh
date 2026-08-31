@@ -40,6 +40,7 @@ import { getQuranRadioConfig } from './guildService';
 import { getLogsConfig } from './auditLogService';
 import { logger } from '../utils/logger';
 import { buildDMIntroPayload } from '../commands/dm/setupDm';
+import { KhatmaMode } from '../types';
 
 interface OAuthGuild {
     id: string;
@@ -917,6 +918,8 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         // The real Adhkar channel is stored by the Adhkar module, not only in
         // the dashboard snapshot. Expose it here so its name and ID stay visible.
         if (adhkarConfig?.generalChannelId) config.adhkarChannelId = adhkarConfig.generalChannelId;
+        const prayerAdhkarChannelId = adhkarConfig?.prayerLinkedChannelId || adhanZones.find(zone => zone.country === adhkarConfig?.primaryZoneCountry && zone.city === adhkarConfig?.primaryZoneCity)?.channelId;
+        if (prayerAdhkarChannelId) (config as any).adhkarPrayerChannelId = prayerAdhkarChannelId;
         if (jumuahConfig?.channelId) config.jumuahChannelId = jumuahConfig.channelId;
         if (quranConfig?.voiceChannelId) config.quranChannelId = quranConfig.voiceChannelId;
         if (salawatConfig?.channelId) {
@@ -968,6 +971,8 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
                     active: khatma.isActive,
                     currentPage: khatma.currentPage,
                     pagesPerDay: khatma.pagesPerDay,
+                    mode: khatma.mode,
+                    ramadanKhatmas: khatma.ramadanKhatmas,
                     lastRunAt: khatma.lastSentAt || null,
                     nextRunAt: khatma.isActive ? nextKhatmaRunAt() : null,
                 } : null,
@@ -981,9 +986,10 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         let rolesToSave = body.roles;
         const adhkarToSave = body.adhkar;
         const salawatToSave = body.salawat;
+        const khatmaToSave = body.khatma;
         
         // Backward compatibility for flat objects
-        if (!body.config && !body.roles) {
+        if (!body.config && !body.roles && !body.adhkar && !body.salawat && !body.khatma) {
             configToSave = body;
         }
         
@@ -992,11 +998,20 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
             const clean: ServerConfig = {};
             for (const key of allowed) if (typeof configToSave[key] === 'string') clean[key] = configToSave[key];
             await setModuleConfig(guild.id, 'serverConfig', clean);
-            if (typeof configToSave.adhkarChannelId === 'string') {
+            if (typeof configToSave.adhkarChannelId === 'string' || typeof configToSave.adhkarPrayerChannelId === 'string') {
                 const adhkarConfig = await getAdhkarV2Config(guild.id);
-                if (adhkarConfig) {
-                    await saveAdhkarV2Config(guild.id, { ...adhkarConfig, generalChannelId: configToSave.adhkarChannelId });
+                if (!adhkarConfig) { json(response, 400, { error: 'adhkar_not_configured' }); return true; }
+                const generalChannelId = typeof configToSave.adhkarChannelId === 'string' ? configToSave.adhkarChannelId : adhkarConfig.generalChannelId;
+                const primaryZone = await getPrimaryAdhanZone(guild.id);
+                const prayerLinkedChannelId = typeof configToSave.adhkarPrayerChannelId === 'string' ? configToSave.adhkarPrayerChannelId : adhkarConfig.prayerLinkedChannelId || primaryZone?.channelId;
+                const channels = await listChannels(guild);
+                if (!channels.some(item => item.id === generalChannelId && item.kind === 'text' && item.canSend)) {
+                    json(response, 400, { error: 'invalid_adhkar_channel' }); return true;
                 }
+                if (!prayerLinkedChannelId || !channels.some(item => item.id === prayerLinkedChannelId && item.kind === 'text' && item.canSend)) {
+                    json(response, 400, { error: 'invalid_prayer_adhkar_channel' }); return true;
+                }
+                await saveAdhkarV2Config(guild.id, { ...adhkarConfig, generalChannelId, prayerLinkedChannelId });
             }
             if (typeof configToSave.jumuahChannelId === 'string') {
                 const jumuahConfig = await getJumuahV2Config(guild.id);
@@ -1035,6 +1050,36 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
                 anchorAt: existing?.anchorAt || new Date().toISOString(),
                 nextRunAt: existing?.nextRunAt,
                 updatedBy: session.user.id,
+            });
+        }
+        if (khatmaToSave && typeof khatmaToSave === 'object') {
+            const existing = await getGuildKhatma(guild.id);
+            const channelId = String(khatmaToSave.channelId || existing?.channelId || '').trim();
+            const channel = (await listChannels(guild)).find(item => item.id === channelId && item.kind === 'text' && item.canSend);
+            if (!channel) { json(response, 400, { error: 'invalid_khatma_channel' }); return true; }
+
+            const validModes = new Set(['custom', 'week', 'month', '3_months', '6_months', 'ramadan']);
+            const mode = (validModes.has(String(khatmaToSave.mode)) ? String(khatmaToSave.mode) : existing?.mode || 'month') as KhatmaMode;
+            const ramadanKhatmas = Math.max(1, Math.min(15, Number(khatmaToSave.ramadanKhatmas || existing?.ramadanKhatmas || 1)));
+            const requestedPages = Number(khatmaToSave.pagesPerDay);
+            const pagesPerDay = mode === 'custom'
+                ? Math.max(1, Math.min(604, Number.isFinite(requestedPages) ? Math.floor(requestedPages) : existing?.pagesPerDay || 1))
+                : calculatePagesPerDay(mode, ramadanKhatmas);
+            const resetProgress = khatmaToSave.resetProgress === true;
+            const now = new Date().toISOString();
+
+            await setGuildKhatma(guild.id, {
+                id: guild.id,
+                isGuild: true,
+                channelId,
+                currentPage: resetProgress ? 1 : existing?.currentPage || 1,
+                pagesPerDay,
+                mode,
+                ramadanKhatmas: mode === 'ramadan' ? ramadanKhatmas : undefined,
+                isActive: khatmaToSave.enabled !== false,
+                lastSentAt: resetProgress ? undefined : existing?.lastSentAt,
+                createdAt: existing?.createdAt || now,
+                updatedAt: now,
             });
         }
         if (adhkarToSave?.categories && typeof adhkarToSave.categories === 'object') {

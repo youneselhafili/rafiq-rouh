@@ -75,7 +75,16 @@ export async function sendFirstJoinGuide(guild: Guild): Promise<boolean> {
     }
 
     const message = await channel.send({
-        content: 'السلام عليكم ورحمة الله وبركاته 👋\nشكراً لإضافة **رفيق الروح**. هذا دليل النسخة الحالية، ويمكن للمشرفين البدء من `/setup_channels`.',
+        content: [
+            'السلام عليكم ورحمة الله وبركاته 👋',
+            'شكرًا لإضافة **رفيق الروح** إلى خادمكم.',
+            '',
+            'يمكنكم إعداد البوت وإدارة قنواته وخدماته من لوحة التحكم:',
+            '<https://rafikk-rouh.web.app/dashboard>',
+            '',
+            'يستطيع مالك الخادم أو من يملك صلاحية **Administrator** في Discord إجراء التعديلات، بينما يمكن لبقية الأعضاء عرض الإعدادات فقط.',
+            'كما يمكن للمشرفين البدء من الأمر `/setup_channels` داخل الخادم.',
+        ].join('\n'),
         embeds: buildHowToUseEmbeds(),
     });
 
