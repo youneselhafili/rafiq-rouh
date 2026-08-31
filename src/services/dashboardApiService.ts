@@ -837,7 +837,14 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         if (!guild) { json(response, 403, { error: 'guild_access_denied' }); return true; }
         if (method === 'GET') {
             const canManage = await canManageGuild(guild, session.user.id, session.oauthGuilds);
-            const channels = await listChannels(guild);
+            const [channels, zones, adhkarConfig] = await Promise.all([
+                listChannels(guild),
+                getManagedAdhanZones(guild.id),
+                getAdhkarV2Config(guild.id),
+            ]);
+            const prayerAdhkarChannelId = adhkarConfig?.prayerLinkedChannelId
+                || zones.find(zone => zone.country === adhkarConfig?.primaryZoneCountry && zone.city === adhkarConfig?.primaryZoneCity)?.channelId
+                || '';
             json(response, 200, {
                 ok: true,
                 readOnly: !canManage,
@@ -849,7 +856,9 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
                     timezone: city.timezone,
                 })),
                 channels,
-                zones: await getManagedAdhanZones(guild.id),
+                zones,
+                prayerAdhkarChannelId,
+                prayerAdhkarConfigured: Boolean(adhkarConfig),
             });
             return true;
         }
@@ -860,9 +869,16 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         if (method === 'PUT') {
             const location = cities.find(item => item.country === country && item.nameEn === city);
             const channelId = String(body.channelId || '').trim();
-            const channel = (await listChannels(guild)).find(item => item.id === channelId && item.kind === 'text' && item.canSend);
+            const prayerAdhkarChannelId = String(body.prayerAdhkarChannelId || '').trim();
+            const channels = await listChannels(guild);
+            const channel = channels.find(item => item.id === channelId && item.kind === 'text' && item.canSend);
             if (!location) { json(response, 400, { error: 'invalid_location' }); return true; }
             if (!channel) { json(response, 400, { error: 'invalid_channel' }); return true; }
+            const adhkarConfig = prayerAdhkarChannelId ? await getAdhkarV2Config(guild.id) : null;
+            if (prayerAdhkarChannelId && !adhkarConfig) { json(response, 400, { error: 'adhkar_not_configured' }); return true; }
+            if (prayerAdhkarChannelId && !channels.some(item => item.id === prayerAdhkarChannelId && item.kind === 'text' && item.canSend)) {
+                json(response, 400, { error: 'invalid_prayer_adhkar_channel' }); return true;
+            }
             await saveManagedAdhanZone(guild.id, {
                 country: location.country,
                 city: location.nameEn,
@@ -870,8 +886,11 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
                 channelId,
                 enabled: body.enabled !== false,
             }, session.user.id);
+            if (adhkarConfig && prayerAdhkarChannelId) {
+                await saveAdhkarV2Config(guild.id, { ...adhkarConfig, prayerLinkedChannelId: prayerAdhkarChannelId, updatedBy: session.user.id });
+            }
             await scheduleAdhanForGuild(guild.id, client);
-            json(response, 200, { ok: true, zones: await getManagedAdhanZones(guild.id) });
+            json(response, 200, { ok: true, zones: await getManagedAdhanZones(guild.id), prayerAdhkarChannelId });
             return true;
         }
         await deleteManagedAdhanZone(guild.id, country, city);
