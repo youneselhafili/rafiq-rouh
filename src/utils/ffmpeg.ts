@@ -10,7 +10,9 @@ export function getFFmpegBinary(): string {
     const override = process.env.FFMPEG_PATH?.trim();
     let bundled: string | undefined;
     try { bundled = require('ffmpeg-static') || undefined; } catch { /* Try PATH below. */ }
-    const candidates = override ? [override] : [bundled, 'ffmpeg'].filter(Boolean) as string[];
+    // Prefer the host-maintained binary. Some ffmpeg-static Linux builds can
+    // crash inside libopus even when `-version` succeeds.
+    const candidates = override ? [override] : ['ffmpeg', bundled].filter(Boolean) as string[];
     for (const candidate of candidates) {
         if (isAbsolute(candidate)) {
             try {

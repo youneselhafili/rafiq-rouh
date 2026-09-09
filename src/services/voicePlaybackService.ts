@@ -280,8 +280,10 @@ async function resourceFromUrl(url: string, label = '', volume?: number) {
     transcoder.stderr?.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-2000); });
     // Keep a listener after preparation too: a child-process error must never escape.
     transcoder.on('error', error => logger.warn(`[Voice] FFmpeg ${label}: ${error.message}`));
-    transcoder.once('exit', code => {
-        if (code && !transcoder.killed) logger.warn(`[Voice] FFmpeg ${label} exited (${code}): ${stderr.trim()}`);
+    transcoder.once('exit', (code, signal) => {
+        if ((code || signal) && !transcoder.killed) {
+            logger.warn(`[Voice] FFmpeg ${label} exited (code=${code}, signal=${signal}): ${stderr.trim()}`);
+        }
     });
     try {
         // Do not report success or leave the player buffering when FFmpeg never produces audio.
