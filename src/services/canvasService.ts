@@ -79,6 +79,63 @@ function drawStars(ctx: any, count: number, opacity: number) {
     }
 }
 
+function drawLocationPin(ctx: any, x: number, y: number, size: number, color: string) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y - size * 0.16, size * 0.3, Math.PI * 0.12, Math.PI * 0.88, true);
+    ctx.lineTo(x, y + size * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#1a0f00';
+    ctx.beginPath();
+    ctx.arc(x, y - size * 0.16, size * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawAlarmClock(ctx: any, x: number, y: number, size: number, color: string) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(2, size * 0.08);
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.34, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x, y - size * 0.2);
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + size * 0.16, y + size * 0.08);
+    ctx.moveTo(x - size * 0.26, y - size * 0.3);
+    ctx.lineTo(x - size * 0.42, y - size * 0.16);
+    ctx.moveTo(x + size * 0.26, y - size * 0.3);
+    ctx.lineTo(x + size * 0.42, y - size * 0.16);
+    ctx.moveTo(x - size * 0.2, y + size * 0.3);
+    ctx.lineTo(x - size * 0.29, y + size * 0.44);
+    ctx.moveTo(x + size * 0.2, y + size * 0.3);
+    ctx.lineTo(x + size * 0.29, y + size * 0.44);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawIconText(
+    ctx: any,
+    text: string,
+    centerX: number,
+    y: number,
+    iconSize: number,
+    color: string,
+    drawIcon: (ctx: any, x: number, y: number, size: number, color: string) => void,
+) {
+    const gap = iconSize * 0.35;
+    const textWidth = ctx.measureText(text).width;
+    const totalWidth = iconSize + gap + textWidth;
+    const left = centerX - totalWidth / 2;
+    drawIcon(ctx, left + iconSize / 2, y, iconSize, color);
+    ctx.fillText(text, left + iconSize + gap + textWidth / 2, y);
+}
+
 function drawMosqueSilhouette(ctx: any) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
     ctx.beginPath();
@@ -166,7 +223,7 @@ export async function generateAdhanImage(
     // City + country
     ctx.fillStyle = '#b0c4de';
     ctx.font = '28px Tajawal, NotoEmoji';
-    ctx.fillText(`📍 ${cityName} — ${country}`, CANVAS_WIDTH / 2, 350);
+    drawIconText(ctx, `${cityName} — ${country}`, CANVAS_WIDTH / 2, 350, 28, '#b0c4de', drawLocationPin);
 
     // Decorative separator
     ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
@@ -256,11 +313,11 @@ export async function generateAdhanWarningImage(
     // Location & Time
     ctx.fillStyle = '#fcd34d'; // Lighter amber
     ctx.font = 'bold 35px Tajawal-Bold, NotoEmoji';
-    ctx.fillText(`⏰ ${prayerTime}`, CANVAS_WIDTH / 2, 250);
+    drawIconText(ctx, prayerTime, CANVAS_WIDTH / 2, 250, 36, '#fcd34d', drawAlarmClock);
 
     ctx.fillStyle = '#d4d4d8';
     ctx.font = '25px Tajawal, NotoEmoji';
-    ctx.fillText(`📍 ${cityNameAr} — ${countryAr}`, CANVAS_WIDTH / 2, 310);
+    drawIconText(ctx, `${cityNameAr} — ${countryAr}`, CANVAS_WIDTH / 2, 310, 26, '#d4d4d8', drawLocationPin);
 
     return canvas.toBuffer('image/png');
 }
@@ -296,7 +353,7 @@ export async function generatePrayerCard(
 
     ctx.fillStyle = '#d4d4d8';
     ctx.font = '30px Tajawal, NotoEmoji';
-    ctx.fillText(`📍 مدينة ${cityName}`, CANVAS_WIDTH / 2, 160);
+    drawIconText(ctx, `مدينة ${cityName}`, CANVAS_WIDTH / 2, 160, 26, '#ffffff', drawLocationPin);
 
     const startX = 150;
     const spacing = (CANVAS_WIDTH - 300) / 4;
