@@ -51,6 +51,8 @@ test('bundled or PATH FFmpeg decodes HTTP audio and rejects invalid audio', { co
         const prepared = await resourceFromUrl(`${base}/valid.mp3`, 'test');
         assert.ok(prepared.resource);
         assert.ok(prepared.transcoder);
+        const transformers = prepared.resource.edges.map(edge => edge.transformer.constructor.name);
+        assert.ok(!transformers.includes('Encoder'), `unexpected Opus encoder: ${transformers.join(', ')}`);
         prepared.resource.playStream.destroy();
         prepared.transcoder.kill();
         await assert.rejects(resourceFromUrl(`${base}/invalid.mp3`, 'invalid'), /produced no audio/);

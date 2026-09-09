@@ -256,16 +256,24 @@ async function connect(channel: VoiceBasedChannel, priorityOwner?: string): Prom
 
 const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
-async function resourceFromUrl(url: string, label = '') {
-    if (!/^https?:\/\//i.test(url)) return { resource: createAudioResource(url) };
-    const transcoder = spawn(getFFmpegBinary(), [
-        '-hide_banner', '-loglevel', 'warning',
+async function resourceFromUrl(url: string, label = '', volume?: number) {
+    const isRemote = /^https?:\/\//i.test(url);
+    const inputOptions = isRemote ? [
         '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
         '-user_agent', BROWSER_USER_AGENT,
         '-rw_timeout', '15000000',
         '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
         '-reconnect_on_network_error', '1',
-        '-i', url, '-vn', '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1',
+    ] : [];
+    const audioFilters = volume === undefined ? [] : ['-filter:a', `volume=${Math.max(0, Math.min(volume, 1))}`];
+    const transcoder = spawn(getFFmpegBinary(), [
+        '-hide_banner', '-loglevel', 'warning',
+        ...inputOptions,
+        '-i', url, '-vn', ...audioFilters,
+        // Send Discord-ready Opus packets. Raw PCM would invoke opusscript, whose
+        // encoder crashes under concurrent guild playback with offset-out-of-bounds.
+        '-c:a', 'libopus', '-b:a', '96k', '-application', 'audio',
+        '-frame_duration', '20', '-f', 'ogg', 'pipe:1',
     ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const output = transcoder.stdout!;
     let stderr = '';
@@ -298,7 +306,7 @@ async function resourceFromUrl(url: string, label = '') {
             transcoder.once('error', onError);
             transcoder.once('close', onEnd);
         });
-        return { resource: createAudioResource(output, { inputType: StreamType.Raw }), transcoder };
+        return { resource: createAudioResource(output, { inputType: StreamType.OggOpus }), transcoder };
     } catch (error) {
         transcoder.kill();
         output.destroy();
@@ -588,11 +596,17 @@ export async function playLocalFileOnce(
     await setPlaybackChannelStatus(channel, statusText);
     await new Promise<void>(async (resolve, reject) => {
         try {
-            const resource = createAudioResource(filePath, { inlineVolume: true });
-            resource.volume?.setVolume(Math.max(0, Math.min(volume, 1)));
+            const prepared = await resourceFromUrl(filePath, statusText, volume);
+            if (session.stopped || active.get(guildId) !== session) {
+                prepared.transcoder?.kill();
+                prepared.resource.playStream.destroy();
+                resolve();
+                return;
+            }
+            session.transcoder = prepared.transcoder;
             player.once(AudioPlayerStatus.Idle, resolve);
             player.once('error', reject);
-            player.play(resource);
+            player.play(prepared.resource);
         } catch (error) {
             reject(error);
         }
