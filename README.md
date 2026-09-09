@@ -63,7 +63,7 @@
 
 ## المتطلبات
 
-- Node.js 18 أو أحدث وnpm.
+- Node.js 22.12.0 أو أحدث وnpm.
 - تطبيق Discord مع Bot Token وGateway Intents: `Guilds`, `GuildMessages`, `GuildVoiceStates`.
 - صلاحيات إرسال الرسائل وإدارة القنوات الصوتية والاتصال والتحدث.
 - FFmpeg على PATH أو عبر `ffmpeg-static`.

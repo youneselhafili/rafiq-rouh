@@ -1,6 +1,5 @@
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
 import { loadCommands } from './handlers/commandHandler';
 import { loadEvents } from './handlers/eventHandler';
 import { initContentService } from './services/contentService';
@@ -18,17 +17,6 @@ process.on('unhandledRejection', reason => {
 process.on('uncaughtException', error => {
     logger.error('Uncaught exception caught by process guard:', error);
 });
-// Add FFmpeg to PATH for @discordjs/voice audio processing
-const ffmpegDir = path.join(
-    process.env.LOCALAPPDATA || 'C:\\Users\\Administrator\\AppData\\Local',
-    'Microsoft', 'WinGet', 'Packages',
-    'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe',
-    'ffmpeg-8.1.1-full_build', 'bin'
-);
-if (!process.env.PATH?.includes('ffmpeg')) {
-    process.env.PATH = `${ffmpegDir};${process.env.PATH || ''}`;
-}
-
 // Define ExtendedClient interface (since we exported it from commandHandler)
 import { ExtendedClient } from './handlers/commandHandler';
 
