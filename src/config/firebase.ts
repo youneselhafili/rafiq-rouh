@@ -49,7 +49,7 @@ export function initializeFirebase(): void {
     }
 
     db = getFirestore();
-    db.settings({ ignoreUndefinedProperties: true });
+    db.settings({ ignoreUndefinedProperties: true, preferRest: true });
     retryAfter = 0;
     consecutiveFailures = 0;
     logger.success('✅ Firebase initialized successfully.');
