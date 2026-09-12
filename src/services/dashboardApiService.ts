@@ -24,6 +24,8 @@ import { getAdhkarV2Config, saveAdhkarV2Config } from './adhkarConfigServiceV2';
 import { getJumuahV2Config, saveJumuahV2Config } from './jumuahConfigServiceV2';
 import { getAllAdhkarCategoryNames } from './contentService';
 import { getSalawatV2Config, saveSalawatV2Config, SalawatV2Config } from './salawatConfigServiceV2';
+import { rescheduleSalawatGuild } from './salawatService';
+import { calculateNextSalawatRun, validSalawatTimezone } from '../utils/salawatSchedule';
 import { deleteManagedAdhanZone, getManagedAdhanZones, getPrimaryAdhanZone, saveManagedAdhanZone } from './adhanZoneService';
 import { scheduleAdhanForGuild } from './adhanService';
 import cities from '../data/cities.json';
@@ -1064,17 +1066,28 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
             const fixedTimes: string[] = [...new Set(rawFixedTimes.filter((value) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)))].sort();
             if (scheduleMode === 'fixed' && !fixedTimes.length) { json(response, 400, { error: 'fixed_times_required' }); return true; }
             const zone = await getPrimaryAdhanZone(guild.id);
+            const enabled = salawatToSave.enabled !== false;
+            const timezone = String(salawatToSave.timezone || existing?.timezone || zone?.timezone || 'Africa/Casablanca');
+            if (!validSalawatTimezone(timezone)) { json(response, 400, { error: 'invalid_salawat_timezone' }); return true; }
+            const scheduleChanged = !existing || existing.enabled !== enabled || existing.scheduleMode !== scheduleMode ||
+                existing.intervalHours !== intervalHours || existing.timezone !== timezone ||
+                existing.fixedTimes.join(',') !== fixedTimes.join(',');
+            const anchor = scheduleChanged ? new Date().toISOString() : existing.anchorAt;
+            const nextRunAt = scheduleChanged && enabled
+                ? calculateNextSalawatRun({ scheduleMode, intervalHours, fixedTimes, timezone }).toISOString()
+                : existing?.nextRunAt;
             await saveSalawatV2Config(guild.id, {
-                enabled: salawatToSave.enabled !== false,
+                enabled,
                 channelId,
                 scheduleMode,
                 intervalHours,
                 fixedTimes,
-                timezone: String(salawatToSave.timezone || existing?.timezone || zone?.timezone || 'Africa/Casablanca'),
-                anchorAt: existing?.anchorAt || new Date().toISOString(),
-                nextRunAt: existing?.nextRunAt,
+                timezone,
+                anchorAt: anchor,
+                nextRunAt,
                 updatedBy: session.user.id,
             });
+            await rescheduleSalawatGuild(client, guild.id);
         }
         if (khatmaToSave && typeof khatmaToSave === 'object') {
             const existing = await getGuildKhatma(guild.id);

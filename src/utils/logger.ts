@@ -10,7 +10,7 @@ const colors = {
 
 function timestamp(): string {
     return new Date().toLocaleString('ar-EG', {
-        timeZone: 'Africa/Algiers',
+        timeZone: process.env.BOT_TIMEZONE || 'Africa/Casablanca',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',

@@ -18,6 +18,7 @@ import {
 } from './salawatConfigServiceV2';
 import { sendAuditLog } from './auditLogService';
 import { logger } from '../utils/logger';
+import { calculateNextSalawatRun, validSalawatTimezone } from '../utils/salawatSchedule';
 
 interface SalawatRuntime {
     pool: number[];
@@ -220,10 +221,7 @@ function fixedMoment(time: string, timezone: string, dayOffset = 0) {
 }
 
 function nextFixedRun(config: SalawatV2Config): moment.Moment {
-    const now = moment().tz(config.timezone);
-    const candidates = config.fixedTimes.flatMap(time => [fixedMoment(time, config.timezone, 0), fixedMoment(time, config.timezone, 1)])
-        .filter(value => value.isAfter(now)).sort((a, b) => a.valueOf() - b.valueOf());
-    return candidates[0] || now.clone().add(1, 'day');
+    return calculateNextSalawatRun(config);
 }
 
 async function scheduleFixed(client: Client, guildId: string, config: SalawatV2Config) {
@@ -254,6 +252,11 @@ export async function rescheduleSalawatGuild(client: Client, guildId: string): P
     stopGuild(guildId);
     const config = await getSalawatV2Config(guildId);
     if (!config?.enabled) return;
+    if (!validSalawatTimezone(config.timezone)) {
+        logger.warn(`[Salawat] Invalid timezone "${config.timezone}" for ${guildId}; using Africa/Casablanca.`);
+        config.timezone = 'Africa/Casablanca';
+        await saveSalawatV2Config(guildId, config);
+    }
     if (config.scheduleMode === 'fixed' && config.fixedTimes.length) await scheduleFixed(client, guildId, config);
     else await scheduleInterval(client, guildId, config);
 }

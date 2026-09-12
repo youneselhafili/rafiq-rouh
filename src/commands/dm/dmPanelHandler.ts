@@ -83,7 +83,7 @@ function validTimes(value: string): string[] {
     return [...new Set(value.match(/(?:[01]\d|2[0-3]):[0-5]\d/g) || [])].sort();
 }
 function salawatTimezone(config: UserDMConfig): string {
-    return config.salawatConfig.timezone || config.timezone || 'Africa/الدار البيضاء';
+    return config.salawatConfig.timezone || config.timezone || 'Africa/Casablanca';
 }
 function nextSalawatRun(config: UserDMConfig): string | undefined {
     const salawat = config.salawatConfig;
@@ -552,7 +552,6 @@ export async function handleDMDeleteCountModal(interaction: ModalSubmitInteracti
     const deleted = await deleteNewestBotMessages(interaction, count);
     await showDeletePanel(interaction, `تم حذف ${deleted} رسالة من رسائل البوت.`);
 }
-
 
 
 

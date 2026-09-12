@@ -1,4 +1,5 @@
 import moment from 'moment-timezone';
+import { calculateNextSalawatRun } from '../../utils/salawatSchedule';
 import {
     ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder,
     ModalBuilder, TextInputBuilder, TextInputStyle,
@@ -140,16 +141,7 @@ export async function handleSalawatSetupInteraction(interaction: any) {
         }
         await interaction.deferUpdate();
         const anchor = moment();
-        let nextRun: moment.Moment;
-        if (session.scheduleMode === 'interval') nextRun = anchor.clone().add(session.intervalHours, 'hours');
-        else {
-            const nowTz = moment().tz(session.timezone);
-            const candidates = session.fixedTimes.flatMap(time => {
-                const [hour, minute] = time.split(':').map(Number);
-                return [0, 1].map(offset => nowTz.clone().add(offset, 'day').hour(hour).minute(minute).second(0).millisecond(0));
-            }).filter(value => value.isAfter(nowTz)).sort((a, b) => a.valueOf() - b.valueOf());
-            nextRun = candidates[0];
-        }
+        const nextRun = calculateNextSalawatRun(session, anchor);
         await saveSalawatV2Config(session.guildId, {
             enabled: session.enabled, channelId: session.channelId, scheduleMode: session.scheduleMode,
             intervalHours: session.intervalHours, fixedTimes: session.fixedTimes, timezone: session.timezone,
