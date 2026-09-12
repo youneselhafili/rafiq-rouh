@@ -73,7 +73,7 @@ async function buildPersonalAdhanPayload(
         const embed = new EmbedBuilder()
             .setColor(COLORS.PRIMARY)
             .setTitle(title)
-            .setDescription(`${cityLine}\n\nفجر ${cleanTime(timings.Fajr || '-')} • ظهر ${cleanTime(timings.Dhuhr || '-')} • عصر ${cleanTime(timings.Asr || '-')} • مغرب ${cleanTime(timings.Maghrib || '-')} • عشاء ${cleanTime(timings.Isha || '-')}`)
+            .setDescription(`${cityLine}\n\nالفجر ${cleanTime(timings.Fajr || '-')} • الظهر ${cleanTime(timings.Dhuhr || '-')} • العصر ${cleanTime(timings.Asr || '-')} • المغرب ${cleanTime(timings.Maghrib || '-')} • العشاء ${cleanTime(timings.Isha || '-')}`)
             .setFooter({ text: BOT_FOOTER })
             .setTimestamp();
         if (file) embed.setImage('attachment://personal_prayer_times.png');

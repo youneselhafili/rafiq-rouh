@@ -354,7 +354,7 @@ async function sendPrayerCard(client: Client, guildId: string, zone: ManagedAdha
     const timings = schedule.timings;
     const file = await tryBuildAttachment(() => generatePrayerCard(schedule.city.name, cleanTime(timings.Fajr), cleanTime(timings.Dhuhr), cleanTime(timings.Asr), cleanTime(timings.Maghrib), cleanTime(timings.Isha)), 'prayer_times.png');
     const embed = new EmbedBuilder().setColor(COLORS.PRIMARY).setTitle(`\uD83D\uDCCB \u0645\u0648\u0627\u0642\u064a\u062a \u0627\u0644\u0635\u0644\u0627\u0629 - ${schedule.city.name}`)
-        .setDescription(`\uD83D\uDCCD ${schedule.city.name} - ${schedule.city.countryAr}\n\uD83D\uDCC5 ${schedule.hijriDate}\n\n\u0641\u0627\u062c\u0631 ${cleanTime(timings.Fajr)} \u2022 \u0638\u0647\u0631 ${cleanTime(timings.Dhuhr)} \u2022 \u0639\u0635\u0631 ${cleanTime(timings.Asr)} \u2022 \u0645\u063a\u0631\u0628 ${cleanTime(timings.Maghrib)} \u2022 \u0639\u0634\u0627\u0621 ${cleanTime(timings.Isha)}`)
+        .setDescription(`📍 ${schedule.city.name} - ${schedule.city.countryAr}\n📅 ${schedule.hijriDate}\n\n${PRAYER_KEYS.map(key => `${PRAYER_NAMES[key]} ${cleanTime(timings[key as keyof PrayerTimings])}`).join(' • ')}`)
         .setFooter({ text: BOT_FOOTER }).setTimestamp();
     if (file) embed.setImage('attachment://prayer_times.png');
     await sendAudiencePayload(client, guildId, zone.channelId, `\uD83D\uDCCB \u0645\u0648\u0627\u0642\u064a\u062a \u0627\u0644\u0635\u0644\u0627\u0629 \u0641\u064a ${schedule.city.name}.`, { embeds: [embed], files: file ? [file] : [] }, schedule.city.nameEn);
