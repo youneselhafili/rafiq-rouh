@@ -198,6 +198,9 @@ function mergeConfig(data: any = {}): UserDMConfig {
         if (data[key] !== undefined) (legacy as any)[key] = data[key] === true;
         else if (key.startsWith('adhkar_') && data.adhkar === true) (legacy as any)[key] = true;
     }
+    const legacyAdhkarCategories = Object.fromEntries(
+        ADHKAR_KEYS.map(key => [key, legacy[key]]),
+    ) as UserDMConfig['adhkarConfig']['categories'];
 
     const merged: UserDMConfig = {
         ...DEFAULT_DM_CONFIG,
@@ -218,8 +221,8 @@ function mergeConfig(data: any = {}): UserDMConfig {
         adhkarConfig: {
             ...DEFAULT_DM_CONFIG.adhkarConfig,
             ...(data.adhkarConfig || {}),
-            enabled: hasEnabledAdhkarCategory({ ...legacy, ...(data.adhkarConfig?.categories || {}) }),
-            categories: { ...DEFAULT_DM_CONFIG.adhkarConfig.categories, ...legacy, ...(data.adhkarConfig?.categories || {}) },
+            enabled: hasEnabledAdhkarCategory({ ...legacyAdhkarCategories, ...(data.adhkarConfig?.categories || {}) }),
+            categories: { ...DEFAULT_DM_CONFIG.adhkarConfig.categories, ...legacyAdhkarCategories, ...(data.adhkarConfig?.categories || {}) },
         },
         salawatConfig: { ...DEFAULT_DM_CONFIG.salawatConfig, ...(data.salawatConfig || {}), enabled: data.salawatConfig?.enabled ?? legacy.salawat, fixedTimes: Array.isArray(data.salawatConfig?.fixedTimes) ? data.salawatConfig.fixedTimes : [] },
         jumuahConfig: { ...DEFAULT_DM_CONFIG.jumuahConfig, ...(data.jumuahConfig || {}), enabled: data.jumuahConfig?.enabled ?? legacy.jumuah },
