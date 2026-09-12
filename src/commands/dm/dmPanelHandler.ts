@@ -190,7 +190,7 @@ function buildPrayer(config: UserDMConfig, iconURL?: string) {
 function buildAdhkar(config: UserDMConfig, iconURL?: string) {
     const embed = panelEmbed('\uD83D\uDCFF \u0627\u0644\u0623\u0630\u0643\u0627\u0631 \u0627\u0644\u064a\u0648\u0645\u064a\u0629', statusLine(config) + '\n**\u0627\u0644\u0623\u0630\u0643\u0627\u0631 \u0627\u0644\u0645\u062e\u062a\u0627\u0631\u0629**\n' + selectedLabels(ADHKAR, config.adhkarConfig.categories), config, iconURL);
     const menu = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId('dm_panel_select_adhkar').setPlaceholder('\u0627\u062e\u062a\u0631 \u0627\u0644\u0623\u0630\u0643\u0627\u0631 \u0627\u0644\u062a\u064a \u062a\u0631\u064a\u062f\u0647\u0627').setMinValues(0).setMaxValues(ADHKAR.length).addOptions(ADHKAR.map(([key, ar, desc]) => ({ label: ar, description: desc, value: key, default: config.adhkarConfig.categories[key] }))));
-    const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(actionButton('dm_panel_toggle_adhkar', config.adhkarConfig.enabled ? '\u0625\u064a\u0642\u0627\u0641 \u0627\u0644\u0623\u0630\u0643\u0627\u0631' : '\u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u0623\u0630\u0643\u0627\u0631', config.adhkarConfig.enabled ? '\u23F8\uFE0F' : '\u25B6\uFE0F', config.adhkarConfig.enabled ? ButtonStyle.Danger : ButtonStyle.Success), homeButton());
+    const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(homeButton());
     return { embeds: [embed], components: [menu, actions] };
 }
 
@@ -510,7 +510,6 @@ if (id === 'dm_panel_select_country') { const state = getLocationState(interacti
 
 
     if (id === 'dm_panel_toggle_prayer') { const active = !config.adhanConfig.enabled; await updateUserDMConfig(interaction.user.id, { adhan: active, adhanConfig: { ...config.adhanConfig, enabled: active } }); return showPanel(interaction, 'prayer'); }
-    if (id === 'dm_panel_toggle_adhkar') { const active = !config.adhkarConfig.enabled; const categories = active ? (Object.values(config.adhkarConfig.categories).some(Boolean) ? config.adhkarConfig.categories : { ...config.adhkarConfig.categories, adhkar_sabah: true, adhkar_masa: true }) : valuesRecord(ADHKAR.map(([key]) => key), []); await updateUserDMConfig(interaction.user.id, { ...categories, adhkarConfig: { ...config.adhkarConfig, enabled: active, categories } }); return showPanel(interaction, 'adhkar'); }
     if (id === 'dm_panel_toggle_quran') { await updateUserDMConfig(interaction.user.id, { quranConfig: { ...config.quranConfig, enabled: !config.quranConfig.enabled } }); return showPanel(interaction, 'quran'); }
     if (id === 'dm_panel_confirm_toggle_all') { await updateUserDMConfig(interaction.user.id, { enabled: !config.enabled }); return showPanel(interaction, 'home'); }
 }
@@ -552,7 +551,6 @@ export async function handleDMDeleteCountModal(interaction: ModalSubmitInteracti
     const deleted = await deleteNewestBotMessages(interaction, count);
     await showDeletePanel(interaction, `تم حذف ${deleted} رسالة من رسائل البوت.`);
 }
-
 
 
 

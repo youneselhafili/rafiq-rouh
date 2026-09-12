@@ -110,7 +110,7 @@ function alreadySent(config: UserDMConfig, key: string): boolean {
 
 async function sendPersonalAdhkarCategory(client: Client, userId: string, config: UserDMConfig, categoryKey: string, eventKey: string) {
     const categories = config.adhkarConfig.categories as Record<string, boolean>;
-    if (!config.enabled || !config.adhkarConfig.enabled || categories[categoryKey] !== true || alreadySent(config, eventKey)) return;
+    if (!config.enabled || categories[categoryKey] !== true || alreadySent(config, eventKey)) return;
     const category = getAllAdhkarCategoryNames().find(item => item.key === categoryKey);
     const item = getAdhkarByKey(categoryKey)[0];
     if (!category || !item || running.has(`${userId}:${eventKey}`)) return;
@@ -259,7 +259,7 @@ async function sendPersonalAdhan(client: Client, userId: string, config: UserDMC
 /** Sends only categories explicitly enabled by this user and only at their
  * catalog-defined time. Categories without a schedule are never guessed. */
 async function sendPersonalScheduledAdhkar(client: Client, userId: string, config: UserDMConfig) {
-    if (!config.enabled || !config.adhkarConfig.enabled) return;
+    if (!config.enabled) return;
     const timezone = config.timezone || 'Africa/Casablanca';
     const now = moment().tz(timezone);
     const minute = now.format('HH:mm');

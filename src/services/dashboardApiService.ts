@@ -26,6 +26,7 @@ import { getAllAdhkarCategoryNames } from './contentService';
 import { getSalawatV2Config, saveSalawatV2Config, SalawatV2Config } from './salawatConfigServiceV2';
 import { rescheduleSalawatGuild } from './salawatService';
 import { calculateNextSalawatRun, validSalawatTimezone } from '../utils/salawatSchedule';
+import { hasEnabledAdhkarCategory } from '../utils/adhkarSelection';
 import { deleteManagedAdhanZone, getManagedAdhanZones, getPrimaryAdhanZone, saveManagedAdhanZone } from './adhanZoneService';
 import { scheduleAdhanForGuild } from './adhanService';
 import cities from '../data/cities.json';
@@ -439,7 +440,8 @@ function dmConfigFromPatch(current: UserDMConfig, patch: Record<string, any>): P
     if (patch.adhkarConfig && typeof patch.adhkarConfig === 'object') {
         out.adhkarConfig = { ...current.adhkarConfig, ...(patch.adhkarConfig as any) };
         if (patch.adhkarConfig.categories && typeof patch.adhkarConfig.categories === 'object') {
-            out.adhkarConfig = { ...(out.adhkarConfig || {}), enabled: Boolean((out.adhkarConfig || {}).enabled ?? current.adhkarConfig?.enabled), categories: { ...(current.adhkarConfig?.categories || {}), ...(patch.adhkarConfig.categories as any) } };
+            const categories = { ...(current.adhkarConfig?.categories || {}), ...(patch.adhkarConfig.categories as any) };
+            out.adhkarConfig = { ...(out.adhkarConfig || {}), enabled: hasEnabledAdhkarCategory(categories), categories };
         }
     }
 

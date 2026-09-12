@@ -9,6 +9,7 @@ import {
 } from '../config/firebase';
 import { logger } from '../utils/logger';
 import { writeJsonAtomic } from '../utils/localJsonStore';
+import { hasEnabledAdhkarCategory } from '../utils/adhkarSelection';
 
 export type DMLanguage = 'ar' | 'darija' | 'en' | 'fr';
 export type DMFormat = 'full' | 'compact';
@@ -217,7 +218,7 @@ function mergeConfig(data: any = {}): UserDMConfig {
         adhkarConfig: {
             ...DEFAULT_DM_CONFIG.adhkarConfig,
             ...(data.adhkarConfig || {}),
-            enabled: data.adhkarConfig?.enabled ?? (Object.values(data.adhkarConfig?.categories || {}).some(value => value === true) || ADHKAR_KEYS.some(key => legacy[key])),
+            enabled: hasEnabledAdhkarCategory({ ...legacy, ...(data.adhkarConfig?.categories || {}) }),
             categories: { ...DEFAULT_DM_CONFIG.adhkarConfig.categories, ...legacy, ...(data.adhkarConfig?.categories || {}) },
         },
         salawatConfig: { ...DEFAULT_DM_CONFIG.salawatConfig, ...(data.salawatConfig || {}), enabled: data.salawatConfig?.enabled ?? legacy.salawat, fixedTimes: Array.isArray(data.salawatConfig?.fixedTimes) ? data.salawatConfig.fixedTimes : [] },
@@ -231,6 +232,7 @@ function mergeConfig(data: any = {}): UserDMConfig {
 
     merged.adhan = merged.adhanConfig.enabled;
     merged.adhan_zone = merged.city;
+    merged.adhkarConfig.enabled = hasEnabledAdhkarCategory(merged.adhkarConfig.categories);
     for (const key of ADHKAR_KEYS) merged[key] = merged.adhkarConfig.categories[key];
     merged.salawat = merged.salawatConfig.enabled;
     merged.jumuah = merged.jumuahConfig.enabled;
@@ -240,7 +242,7 @@ function mergeConfig(data: any = {}): UserDMConfig {
 function flattenConfig(config: UserDMConfig): Record<string, any> {
     const next: UserDMConfig = mergeConfig(config);
     next.adhanConfig.enabled = next.adhan;
-    next.adhkarConfig.enabled = Object.values(next.adhkarConfig.categories).some(value => value === true);
+    next.adhkarConfig.enabled = hasEnabledAdhkarCategory(next.adhkarConfig.categories);
     next.salawatConfig.enabled = next.salawat;
     next.jumuahConfig.enabled = next.jumuah;
     next.city = next.city || next.adhan_zone;
