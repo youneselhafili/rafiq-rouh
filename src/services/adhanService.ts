@@ -98,14 +98,18 @@ export async function fetchPrayerTimes(city: string, country: string, method?: n
 export async function fetchZonePrayerSchedule(zone: ManagedAdhanZone): Promise<ZonePrayerSchedule | null> {
     const meta = getCityMeta(zone.city);
     if (!meta) return null;
-    let fallbackUsed = false;
+
+    // AlAdhan is the global source for every supported country and city. It
+    // provides one stable JSON contract and country-specific calculation
+    // methods, unlike the HTML pages used by the Morocco-only fallback.
+    const result = await fetchPrayerTimes(meta.nameEn, meta.country, meta.method);
+    if (result) return { ...result, city: meta, source: 'aladhan', fallbackUsed: false };
+
     if (meta.yabiladiId && meta.yabiladiSlug) {
         const timings = await fetchYabiladiPrayerTimes(meta.yabiladiId, meta.yabiladiSlug);
-        if (timings) return { timings: { ...timings, Sunrise: '' } as PrayerTimings, hijriDate: `المغرب - ${meta.name}`, city: meta, source: 'yabiladi', fallbackUsed: false };
-        fallbackUsed = true;
+        if (timings) return { timings: { ...timings, Sunrise: '' } as PrayerTimings, hijriDate: `المغرب - ${meta.name}`, city: meta, source: 'yabiladi', fallbackUsed: true };
     }
-    const result = await fetchPrayerTimes(meta.nameEn, meta.country, meta.method);
-    return result ? { ...result, city: meta, source: 'aladhan', fallbackUsed } : null;
+    return null;
 }
 
 export async function getNextPrayerForZone(zone: ManagedAdhanZone): Promise<NextPrayer | null> {
