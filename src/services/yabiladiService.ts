@@ -9,53 +9,52 @@ interface YabiladiTimings {
     Isha: string;
 }
 
-// Cache structure: key = "slug:YYYY-MM", value = full month map { "DD": YabiladiTimings }
+// Cache structure: key = "slug:YYYY-MM", value = full month map { "DD/MM": YabiladiTimings }
 const monthlyCache = new Map<string, Map<string, YabiladiTimings>>();
 
-function getCacheKey(slug: string): string {
-    const now = new Date();
-    const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return `${slug}:${yearMonth}`;
+function casablancaDateParts(now = new Date()): { day: string; month: string; year: string } {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(now);
+    const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value || '';
+    return { day: value('day'), month: value('month'), year: value('year') };
+}
+
+function getCacheKey(slug: string, now = new Date()): string {
+    const { year, month } = casablancaDateParts(now);
+    return `${slug}:${year}-${month}`;
 }
 
 /**
  * Parses a full month's prayer table from Yabiladi HTML.
  * Returns a map of { "DD": YabiladiTimings } for every day in the table.
  */
-function parseMonthlyTable(html: string): Map<string, YabiladiTimings> | null {
-    const tableMatch = html.match(/<table[^>]*class="prayer"[^>]*>[\s\S]*?<\/table>/i);
-    if (!tableMatch) return null;
-
-    const tableHtml = tableMatch[0];
+export function parseMonthlyTable(html: string): Map<string, YabiladiTimings> | null {
     const dayMap = new Map<string, YabiladiTimings>();
+    const tableRegex = /<table\b[^>]*class=(?:"[^"]*\bprayer(?:-table)?\b[^"]*"|'[^']*\bprayer(?:-table)?\b[^']*')[^>]*>[\s\S]*?<\/table>/gi;
+    let tableMatch: RegExpExecArray | null;
 
-    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/gi;
-    let rowMatch: RegExpExecArray | null;
+    while ((tableMatch = tableRegex.exec(html)) !== null) {
+        const rowRegex = /<tr\b[^>]*>[\s\S]*?<\/tr>/gi;
+        let rowMatch: RegExpExecArray | null;
+        while ((rowMatch = rowRegex.exec(tableMatch[0])) !== null) {
+            const rowHtml = rowMatch[0];
+            if (/<th\b/i.test(rowHtml)) continue;
 
-    while ((rowMatch = rowRegex.exec(tableHtml)) !== null) {
-        const rowHtml = rowMatch[0];
-        if (rowHtml.includes('<th')) continue;
+            // Yabiladi now wraps the date in nested spans, so read it from the
+            // complete row instead of expecting it directly inside the <td>.
+            const dateMatch = rowHtml.match(/\b(\d{1,2})\/(\d{1,2})\b/);
+            if (!dateMatch) continue;
+            const dateKey = `${dateMatch[1].padStart(2, '0')}/${dateMatch[2].padStart(2, '0')}`;
+            const times = [...rowHtml.matchAll(/\b([01]\d|2[0-3]):([0-5]\d)\b/g)]
+                .map(match => `${match[1]}:${match[2]}`);
 
-        const dateMatch = rowHtml.match(/<td[^>]*>\s*(\d{2})\/(\d{2})/);
-        if (!dateMatch) continue;
-
-        const day = dateMatch[1].padStart(2, '0');
-
-        const timeRegex = /<td[^>]*>\s*(\d{2}:\d{2})/g;
-        const times: string[] = [];
-        let timeMatch: RegExpExecArray | null;
-        while ((timeMatch = timeRegex.exec(rowHtml)) !== null) {
-            times.push(timeMatch[1]);
-        }
-
-        if (times.length >= 5) {
-            dayMap.set(day, {
-                Fajr: times[0],
-                Dhuhr: times[1],
-                Asr: times[2],
-                Maghrib: times[3],
-                Isha: times[4],
-            });
+            if (times.length >= 5) {
+                dayMap.set(dateKey, {
+                    Fajr: times[0], Dhuhr: times[1], Asr: times[2],
+                    Maghrib: times[3], Isha: times[4],
+                });
+            }
         }
     }
 
@@ -69,18 +68,19 @@ function parseMonthlyTable(html: string): Map<string, YabiladiTimings> | null {
  */
 export async function fetchYabiladiPrayerTimes(yabiladiId: number, slug: string): Promise<YabiladiTimings | null> {
     const now = new Date();
-    const todayDay = String(now.getDate()).padStart(2, '0');
-    const cacheKey = getCacheKey(slug);
+    const { day, month } = casablancaDateParts(now);
+    const todayKey = `${day}/${month}`;
+    const cacheKey = getCacheKey(slug, now);
 
     // ── 1. Return from cache if this month's data is already loaded ────────
     const cached = monthlyCache.get(cacheKey);
     if (cached) {
-        const timings = cached.get(todayDay);
+        const timings = cached.get(todayKey);
         if (timings) {
-            logger.info(`📅 Yabiladi cache hit for ${slug} — day ${todayDay}`);
+            logger.info(`📅 Yabiladi cache hit for ${slug} — day ${todayKey}`);
             return timings;
         }
-        logger.warn(`⚠️ Yabiladi cache exists for ${slug} but no entry for day ${todayDay}`);
+        logger.warn(`⚠️ Yabiladi cache exists for ${slug} but no entry for day ${todayKey}`);
         return null;
     }
 
@@ -108,7 +108,7 @@ export async function fetchYabiladiPrayerTimes(yabiladiId: number, slug: string)
         monthlyCache.set(cacheKey, dayMap);
         logger.success(`✅ Yabiladi ${slug}: cached ${dayMap.size} days for this month.`);
 
-        return dayMap.get(todayDay) ?? null;
+        return dayMap.get(todayKey) ?? null;
 
     } catch (error) {
         logger.error(`Failed to fetch Yabiladi prayer times: ${error instanceof Error ? error.message : String(error)}`);
@@ -126,4 +126,3 @@ export function clearYabiladiMonthlyCache(): void {
     monthlyCache.clear();
     if (count > 0) logger.info(`🗑️ Yabiladi monthly cache cleared (${count} entries).`);
 }
-
