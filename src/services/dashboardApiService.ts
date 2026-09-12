@@ -456,6 +456,49 @@ function dmConfigFromPatch(current: UserDMConfig, patch: Record<string, any>): P
     return out;
 }
 
+type PersonalDmSystem = 'prayer' | 'adhkar' | 'quran' | 'salawat' | 'jumuah' | 'wird';
+
+function personalDmSystemPatch(current: UserDMConfig, system: PersonalDmSystem, enabled: boolean): Partial<UserDMConfig> {
+    const patch: Partial<UserDMConfig> = enabled ? { enabled: true } : {};
+
+    if (system === 'prayer') patch.adhanConfig = { ...current.adhanConfig, enabled };
+    if (system === 'salawat') patch.salawatConfig = { ...current.salawatConfig, enabled };
+    if (system === 'jumuah') patch.jumuahConfig = { ...current.jumuahConfig, enabled };
+    if (system === 'quran') {
+        const quranConfig = { ...current.quranConfig, enabled };
+        if (enabled && !quranConfig.dailyAyah && !quranConfig.kahf && !quranConfig.readingReminder) quranConfig.dailyAyah = true;
+        patch.quranConfig = quranConfig;
+    }
+    if (system === 'wird') {
+        patch.khatma = current.khatma
+            ? { ...current.khatma, enabled }
+            : { enabled, currentPage: 1, pagesPerDay: 21, mode: 'month', updatedAt: new Date().toISOString() };
+    }
+    if (system === 'adhkar') {
+        const currentCategories = { ...current.adhkarConfig.categories } as Record<string, boolean>;
+        const savedCategories = (current.dashboard?.settings?.lastAdhkarCategories || {}) as Record<string, boolean>;
+        const fallbackKey = getAllAdhkarCategoryNames()[0]?.key || 'adhkar_sabah';
+        const restoredCategories = hasEnabledAdhkarCategory(savedCategories)
+            ? savedCategories
+            : hasEnabledAdhkarCategory(currentCategories)
+                ? currentCategories
+                : { ...currentCategories, [fallbackKey]: true };
+        const categories = enabled
+            ? restoredCategories
+            : Object.fromEntries(Object.keys(currentCategories).map(key => [key, false]));
+        patch.adhkarConfig = { ...current.adhkarConfig, enabled: hasEnabledAdhkarCategory(categories), categories: categories as UserDMConfig['adhkarConfig']['categories'] };
+        patch.dashboard = {
+            ...(current.dashboard || {}),
+            settings: {
+                ...(current.dashboard?.settings || {}),
+                ...(enabled ? {} : { lastAdhkarCategories: currentCategories }),
+            },
+        };
+    }
+
+    return patch;
+}
+
 function summarizeWird(config: UserDMConfig | null, guildId?: string) {
     if (!config) return { enabled: false, items: [] };
     const items: string[] = [];
@@ -770,6 +813,16 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
             .setTimestamp();
         await user.send({ embeds: [embed] });
         json(response, 200, { ok: true });
+        return true;
+    }
+    const dmSystemMatch = url.pathname.match(/^\/api\/me\/dm-systems\/(prayer|adhkar|quran|salawat|jumuah|wird)$/);
+    if (dmSystemMatch && method === 'PUT') {
+        const body = await bodyJson(request);
+        if (typeof body.enabled !== 'boolean') { json(response, 400, { error: 'enabled_boolean_required' }); return true; }
+        const system = dmSystemMatch[1] as PersonalDmSystem;
+        const current = await getUserDMConfig(session.user.id);
+        await updateUserDMConfig(session.user.id, personalDmSystemPatch(current, system, body.enabled));
+        json(response, 200, { ok: true, system, enabled: body.enabled, config: await getUserDMConfig(session.user.id) });
         return true;
     }
     if (url.pathname === '/api/me/wird' && method === 'GET') {
