@@ -746,6 +746,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
                     country: city.country,
                     countryAr: city.countryAr,
                     timezone: city.timezone,
+                    locationType: city.locationType, isCityOption: city.isCityOption, provinceCode: city.provinceCode, provinceName: city.provinceName, parentCity: city.parentCity,
                 })),
             });
             return true;
@@ -914,6 +915,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
                     country: city.country,
                     countryAr: city.countryAr,
                     timezone: city.timezone,
+                    locationType: city.locationType, isCityOption: city.isCityOption, provinceCode: city.provinceCode, provinceName: city.provinceName, parentCity: city.parentCity,
                 })),
                 channels,
                 zones,

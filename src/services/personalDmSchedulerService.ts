@@ -200,7 +200,7 @@ async function sendPersonalAdhan(client: Client, userId: string, config: UserDMC
     if (!meta) return;
 
     const timezone = config.timezone || meta.timezone || 'Africa/Casablanca';
-    const schedule = await fetchPrayerTimes(meta.nameEn, meta.country, meta.method);
+    const schedule = await fetchPrayerTimes(meta.queryName || meta.nameEn, meta.country, meta.method);
     if (!schedule) return;
 
     const now = moment().tz(timezone);

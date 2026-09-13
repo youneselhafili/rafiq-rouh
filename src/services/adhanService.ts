@@ -41,6 +41,7 @@ interface CityMeta {
     countryAr: string;
     timezone: string;
     method: number;
+    queryName?: string;
     yabiladiId?: number;
     yabiladiSlug?: string;
 }
@@ -102,7 +103,7 @@ export async function fetchZonePrayerSchedule(zone: ManagedAdhanZone): Promise<Z
     // AlAdhan is the global source for every supported country and city. It
     // provides one stable JSON contract and country-specific calculation
     // methods, unlike the HTML pages used by the Morocco-only fallback.
-    const result = await fetchPrayerTimes(meta.nameEn, meta.country, meta.method);
+    const result = await fetchPrayerTimes(meta.queryName || meta.nameEn, meta.country, meta.method);
     if (result) return { ...result, city: meta, source: 'aladhan', fallbackUsed: false };
 
     if (meta.yabiladiId && meta.yabiladiSlug) {

@@ -13,6 +13,7 @@ import {
     TextInputStyle,
 } from 'discord.js';
 import cities from '../../data/cities.json';
+import { listCities, listAreas, parentCityId, areaLabel } from '../../utils/locationCatalog';
 import { DM_PANEL_FOOTER, renderPanelEmbed, UI_COLORS } from '../../utils/uiRenderer';
 import { DMAdhanEvent, DMLanguage, DMPrayerKey, getUserDMConfig, updateUserDMConfig, UserDMConfig } from '../../services/dmSubscriptionService';
 
@@ -39,7 +40,7 @@ const ADHKAR: Array<[keyof UserDMConfig['adhkarConfig']['categories'], string, s
     ['adhkar_other', '\u062f\u0639\u0627\u0621 \u064a\u0648\u0645\u064a', '\u062f\u0639\u0627\u0621 \u064a\u0648\u0645\u064a \u0645\u062e\u062a\u0627\u0631'],
 ];
 const LOCATION_PAGE_SIZE = 25;
-const locationState = new Map<string, { country?: string; countryPage: number; cityPage: number }>();
+const locationState = new Map<string, { country?: string; countryPage: number; cityPage: number; parentCity?: string; areaPage?: number }>();
 
 function countryEntries() {
     const result = new Map<string, string>();
@@ -57,13 +58,13 @@ function currentCountry(config: UserDMConfig, userId: string): string {
 function getLocationState(userId: string, config: UserDMConfig) {
     const countries = countryEntries();
     const country = currentCountry(config, userId);
-    const existing = locationState.get(userId) || { country, countryPage: 0, cityPage: 0 };
+    const existing = locationState.get(userId) || { country, countryPage: 0, cityPage: 0, parentCity: parentCityId(config.city), areaPage: 0 };
     existing.country = country;
     const countryIndex = Math.max(0, countries.findIndex(item => item.country === country));
     existing.countryPage = Math.max(0, Math.min(existing.countryPage ?? Math.floor(countryIndex / LOCATION_PAGE_SIZE), Math.ceil(countries.length / LOCATION_PAGE_SIZE) - 1));
     const countryPageStart = existing.countryPage * LOCATION_PAGE_SIZE;
     if (countryIndex >= 0 && (countryIndex < countryPageStart || countryIndex >= countryPageStart + LOCATION_PAGE_SIZE)) existing.countryPage = Math.floor(countryIndex / LOCATION_PAGE_SIZE);
-    const cityCount = cities.filter(item => item.country === existing.country).length;
+    const cityCount = listCities(existing.country).length;
     existing.cityPage = Math.max(0, Math.min(existing.cityPage || 0, Math.max(0, Math.ceil(cityCount / LOCATION_PAGE_SIZE) - 1)));
     locationState.set(userId, existing);
     return existing;
@@ -150,7 +151,7 @@ function buildLocation(config: UserDMConfig, iconURL?: string, userId = 'system'
     const countryPages = Math.max(1, Math.ceil(countries.length / LOCATION_PAGE_SIZE));
     const countryOptions = countries.slice(state.countryPage * LOCATION_PAGE_SIZE, (state.countryPage + 1) * LOCATION_PAGE_SIZE);
     const selectedCountry = countries.find(item => item.country === state.country);
-    const cityList = cities.filter(item => item.country === state.country);
+    const cityList = listCities(state.country);
     const cityPages = Math.max(1, Math.ceil(cityList.length / LOCATION_PAGE_SIZE));
     const cityOptions = cityList.slice(state.cityPage * LOCATION_PAGE_SIZE, (state.cityPage + 1) * LOCATION_PAGE_SIZE);
     const selectedCity = cities.find(item => item.nameEn === config.city);
@@ -166,9 +167,22 @@ function buildLocation(config: UserDMConfig, iconURL?: string, userId = 'system'
     );
     const cityRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder().setCustomId('dm_panel_select_city').setPlaceholder('اختر المدينة').addOptions(
-            cityOptions.map(city => ({ label: city.name.slice(0, 100), description: (city.countryAr || city.timezone).slice(0, 100), value: city.nameEn, default: city.nameEn === config.city, emoji: '📍' })),
+            cityOptions.map(city => ({ label: city.name.slice(0, 100), description: (city.countryAr || city.timezone).slice(0, 100), value: city.nameEn, default: city.nameEn === state.parentCity, emoji: '📍' })),
         ),
     );
+    const areas = listAreas(state.parentCity);
+    const areaPages = Math.max(1, Math.ceil(areas.length / 22));
+    state.areaPage = Math.max(0, Math.min(state.areaPage || 0, areaPages - 1));
+    const areaRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder().setCustomId('dm_panel_select_area').setPlaceholder('المناطق').setDisabled(!state.parentCity).addOptions(
+            { label: 'مركز المدينة', value: '__center', default: config.city === state.parentCity },
+            ...areas.slice(state.areaPage * 22, (state.areaPage + 1) * 22).map(x => ({ label: areaLabel(x).slice(0, 100), value: x.nameEn, default: x.nameEn === config.city })),
+            ...(state.areaPage > 0 ? [{ label: '◀ مناطق سابقة', value: '__prev' }] : []),
+            ...(state.areaPage < areaPages - 1 ? [{ label: 'مناطق أخرى ▶', value: '__next' }] : []),
+        ),
+    );
+    const parent = cities.find(x => x.nameEn === state.parentCity);
+    if (parent?.provinceName) embed.addFields({ name: 'المناطق', value: `مقاطعات المدينة والجماعات والمراكز في ${parent.provinceName}` });
     const nav = new ActionRowBuilder<ButtonBuilder>().addComponents(
         navButton('dm_panel_country_prev', 'دول سابقة', state.countryPage <= 0),
         navButton('dm_panel_country_next', 'دول أخرى', state.countryPage >= countryPages - 1),
@@ -176,7 +190,7 @@ function buildLocation(config: UserDMConfig, iconURL?: string, userId = 'system'
         navButton('dm_panel_city_next', 'مدن أخرى', state.cityPage >= cityPages - 1),
         homeButton(),
     );
-    return { embeds: [embed], components: [countryRow, cityRow, nav] };
+    return { embeds: [embed], components: [countryRow, cityRow, areaRow, nav] };
 }
 
 function buildPrayer(config: UserDMConfig, iconURL?: string) {
@@ -487,8 +501,16 @@ export async function handleDMPanelInteraction(interaction: ButtonInteraction | 
             await updateUserDMConfig(interaction.user.id, { salawat: true, salawatConfig });
             return showPanel(interaction, 'more');
         }
-if (id === 'dm_panel_select_country') { const state = getLocationState(interaction.user.id, config); state.country = interaction.values[0]; state.cityPage = 0; locationState.set(interaction.user.id, state); return showPanel(interaction, 'location', config); }
-        if (id === 'dm_panel_select_city') { const city = cities.find(item => item.nameEn === interaction.values[0]); if (!city) return showPanel(interaction, 'location', config); await updateUserDMConfig(interaction.user.id, { city: city.nameEn, adhan_zone: city.nameEn, timezone: city.timezone }); const state = getLocationState(interaction.user.id, config); state.country = city.country; locationState.set(interaction.user.id, state); return showPanel(interaction, 'location'); }
+if (id === 'dm_panel_select_country') { const state = getLocationState(interaction.user.id, config); state.country = interaction.values[0]; state.cityPage = 0; state.parentCity = undefined; state.areaPage = 0; locationState.set(interaction.user.id, state); return showPanel(interaction, 'location', config); }
+        if (id === 'dm_panel_select_area') {
+            const state = getLocationState(interaction.user.id, config);
+            const value = interaction.values[0];
+            if (value === '__prev' || value === '__next') { state.areaPage = (state.areaPage || 0) + (value === '__next' ? 1 : -1); return showPanel(interaction, 'location', config); }
+            const area = value === '__center' ? cities.find(x => x.nameEn === state.parentCity) : listAreas(state.parentCity).find(x => x.nameEn === value);
+            if (area) await updateUserDMConfig(interaction.user.id, { city: area.nameEn, adhan_zone: area.nameEn, timezone: area.timezone });
+            return showPanel(interaction, 'location');
+        }
+        if (id === 'dm_panel_select_city') { const city = listCities(getLocationState(interaction.user.id, config).country).find(item => item.nameEn === interaction.values[0]); if (!city) return showPanel(interaction, 'location', config); await updateUserDMConfig(interaction.user.id, { city: city.nameEn, adhan_zone: city.nameEn, timezone: city.timezone }); const state = getLocationState(interaction.user.id, config); state.country = city.country; state.parentCity = city.nameEn; state.areaPage = 0; locationState.set(interaction.user.id, state); return showPanel(interaction, 'location'); }
         return;
     }
     if (id === 'dm_panel_country_prev' || id === 'dm_panel_country_next' || id === 'dm_panel_city_prev' || id === 'dm_panel_city_next') {

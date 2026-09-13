@@ -5,6 +5,7 @@ import {
 } from 'discord.js';
 import { UI_COLORS } from '../../utils/uiRenderer';
 import cities from '../../data/cities.json';
+import { listCities, listAreas, areaLabel } from '../../utils/locationCatalog';
 import { COUNTRY_FLAGS } from '../../utils/constants';
 import {
     AdhanAudioConfig, adhanAudioLabel, getAdhanAudioConfig, listAdhanAudioFiles,
@@ -17,6 +18,9 @@ export interface AdhanSetupSession {
     channelId?: string;
     country?: string;
     city?: string;
+    parentCity?: string;
+    cityPage?: number;
+    areaPage?: number;
     zoneEnabled: boolean;
     view: AdhanSetupView;
     audio: AdhanAudioConfig;
@@ -30,10 +34,14 @@ function uniqueCountries() {
     return [...result.entries()].map(([en, ar]) => ({ en, ar })).slice(0, 25);
 }
 
-function cityOptions(country?: string) {
-    return cities.filter(city => city.country === country).slice(0, 25).map(city => ({
-        label: city.name.slice(0, 100), value: city.nameEn, emoji: '📍',
-    }));
+function pagedOptions(items: Array<{ label: string; value: string }>, page = 0) {
+    const pages = Math.max(1, Math.ceil(items.length / 22));
+    const current = Math.max(0, Math.min(page, pages - 1));
+    return [
+        ...items.slice(current * 22, (current + 1) * 22),
+        ...(current > 0 ? [{ label: '◀ الصفحة السابقة', value: '__prev' }] : []),
+        ...(current < pages - 1 ? [{ label: 'الصفحة التالية ▶', value: '__next' }] : []),
+    ];
 }
 
 export const data = new SlashCommandBuilder()
@@ -63,7 +71,8 @@ export function buildAdhanSetupPayload(session: AdhanSetupSession) {
         .addFields(
             { name: '💬 قناة الإشعارات', value: session.channelId ? `<#${session.channelId}>` : 'لم يتم الاختيار', inline: true },
             { name: '🌍 الدولة', value: country ? country.countryAr : 'لم يتم الاختيار', inline: true },
-            { name: '📍 المدينة', value: city ? city.name : 'لم يتم الاختيار', inline: true },
+            { name: '📍 المدينة والمنطقة', value: city ? city.name : 'لم يتم الاختيار', inline: true },
+            { name: 'المناطق', value: city?.provinceName ? `مقاطعات المدينة والجماعات والمراكز في ${city.provinceName}` : 'اختر المدينة أولاً', inline: false },
             { name: '🔊 النظام الصوتي العام', value: modeLabel(session.audio.mode), inline: false },
         )
         .setFooter({ text: 'لا يتم حفظ أي تغيير قبل الضغط على زر الحفظ.' });
@@ -75,10 +84,17 @@ export function buildAdhanSetupPayload(session: AdhanSetupSession) {
             countries.map(item => ({ label: item.ar, description: 'دولة متاحة', value: item.en, emoji: COUNTRY_FLAGS[item.en] || '🌍', default: item.en === session.country })),
         ),
     );
-    const availableCities = cityOptions(session.country);
+    const availableCities = pagedOptions(listCities(session.country).map(x => ({ label: x.name.slice(0, 100), value: x.nameEn })), session.cityPage);
     const citiesRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder().setCustomId('adhan_setup_city').setPlaceholder('اختر المدينة')
-            .setDisabled(!availableCities.length).addOptions(availableCities.length ? availableCities.map(item => ({ ...item, default: item.value === session.city })) : [{ label: 'اختر الدولة أولاً', value: 'none' }]),
+            .setDisabled(!availableCities.length).addOptions(availableCities.length ? availableCities.map(item => ({ ...item, default: item.value === session.parentCity })) : [{ label: 'اختر الدولة أولاً', value: 'none' }]),
+    );
+    const availableAreas = pagedOptions(listAreas(session.parentCity).map(x => ({ label: areaLabel(x).slice(0, 100), value: x.nameEn })), session.areaPage);
+    const areasRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder().setCustomId('adhan_setup_area').setPlaceholder('المناطق').setDisabled(!session.parentCity).addOptions(
+            { label: 'مركز المدينة', value: '__center', default: session.city === session.parentCity },
+            ...availableAreas.map(item => ({ ...item, default: item.value === session.city })),
+        ),
     );
     const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId('adhan_setup_save_zone').setLabel('حفظ المنطقة').setEmoji('💾').setStyle(ButtonStyle.Success),
@@ -86,7 +102,7 @@ export function buildAdhanSetupPayload(session: AdhanSetupSession) {
         new ButtonBuilder().setCustomId('adhan_setup_channel_id').setLabel('لصق معرّف القناة').setEmoji('🔢').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('adhan_setup_cancel').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
     );
-    return { embeds: [embed], components: [channels, countriesRow, citiesRow, buttons] };
+    return { embeds: [embed], components: [channels, countriesRow, citiesRow, areasRow, buttons] };
 }
 
 function buildAudioPayload(session: AdhanSetupSession) {

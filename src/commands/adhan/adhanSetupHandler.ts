@@ -3,6 +3,7 @@ import {
     ModalBuilder, TextInputBuilder, TextInputStyle,
 } from 'discord.js';
 import cities from '../../data/cities.json';
+import { listCities, listAreas } from '../../utils/locationCatalog';
 import { activeAdhanSetups, buildAdhanSetupPayload, modeLabel } from './setupAdhan';
 import { saveManagedAdhanZone } from '../../services/adhanZoneService';
 import {
@@ -53,9 +54,14 @@ export async function handleAdhanSetupInteraction(interaction: any) {
         const value = interaction.values[0];
         if (interaction.customId === 'adhan_setup_country') {
             session.country = value;
-            session.city = undefined;
+            session.city = undefined; session.parentCity = undefined; session.cityPage = 0; session.areaPage = 0;
         } else if (interaction.customId === 'adhan_setup_city' && value !== 'none') {
-            session.city = value;
+            if (value === '__prev' || value === '__next') session.cityPage = Math.max(0, Math.min(Math.ceil(listCities(session.country).length / 22) - 1, (session.cityPage || 0) + (value === '__next' ? 1 : -1)));
+            else if (listCities(session.country).some(x => x.nameEn === value)) { session.parentCity = value; session.city = value; session.areaPage = 0; }
+        } else if (interaction.customId === 'adhan_setup_area') {
+            if (value === '__prev' || value === '__next') session.areaPage = Math.max(0, Math.min(Math.ceil(listAreas(session.parentCity).length / 22) - 1, (session.areaPage || 0) + (value === '__next' ? 1 : -1)));
+            else if (value === '__center') session.city = session.parentCity;
+            else if (listAreas(session.parentCity).some(x => x.nameEn === value)) session.city = value;
         } else if (interaction.customId === 'adhan_audio_mode') {
             session.audio.mode = value as typeof session.audio.mode;
         } else if (interaction.customId === 'adhan_audio_file') {
