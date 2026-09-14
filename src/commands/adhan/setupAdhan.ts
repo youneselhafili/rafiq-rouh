@@ -5,7 +5,7 @@ import {
 } from 'discord.js';
 import { UI_COLORS } from '../../utils/uiRenderer';
 import cities from '../../data/cities.json';
-import { listCities, listAreas, areaLabel } from '../../utils/locationCatalog';
+import { listCities, listAreas, areaLabel, filterLocations } from '../../utils/locationCatalog';
 import { COUNTRY_FLAGS } from '../../utils/constants';
 import {
     AdhanAudioConfig, adhanAudioLabel, getAdhanAudioConfig, listAdhanAudioFiles,
@@ -17,6 +17,10 @@ export interface AdhanSetupSession {
     guildId: string;
     channelId?: string;
     country?: string;
+    countryPage?: number;
+    countryQuery?: string;
+    cityQuery?: string;
+    areaQuery?: string;
     city?: string;
     parentCity?: string;
     cityPage?: number;
@@ -31,7 +35,7 @@ export const activeAdhanSetups = new Map<string, AdhanSetupSession>();
 function uniqueCountries() {
     const result = new Map<string, string>();
     for (const city of cities) if (!result.has(city.country)) result.set(city.country, city.countryAr);
-    return [...result.entries()].map(([en, ar]) => ({ en, ar })).slice(0, 25);
+    return [...result.entries()].map(([en, ar]) => ({ en, ar }));
 }
 
 function pagedOptions(items: Array<{ label: string; value: string }>, page = 0) {
@@ -63,7 +67,9 @@ export function buildAdhanSetupPayload(session: AdhanSetupSession) {
     if (session.view === 'audio') return buildAudioPayload(session);
     const country = cities.find(city => city.country === session.country);
     const city = cities.find(item => item.nameEn === session.city && item.country === session.country);
-    const countries = uniqueCountries();
+    const countries = pagedOptions(uniqueCountries()
+        .filter(item => !session.countryQuery || `${item.ar} ${item.en}`.toLocaleLowerCase().includes(session.countryQuery.toLocaleLowerCase()))
+        .map(item => ({ label: item.ar, value: item.en })), session.countryPage);
     const embed = new EmbedBuilder()
         .setColor(UI_COLORS.BRAND)
         .setTitle('🕌 إعداد منطقة الأذان')
@@ -81,18 +87,18 @@ export function buildAdhanSetupPayload(session: AdhanSetupSession) {
     );
     const countriesRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder().setCustomId('adhan_setup_country').setPlaceholder('اختر الدولة').addOptions(
-            countries.map(item => ({ label: item.ar, description: 'دولة متاحة', value: item.en, emoji: COUNTRY_FLAGS[item.en] || '🌍', default: item.en === session.country })),
+            countries.map(item => ({ label: item.label, description: 'دولة متاحة', value: item.value, emoji: COUNTRY_FLAGS[item.value] || '🌍', default: item.value === session.country })),
         ),
     );
-    const availableCities = pagedOptions(listCities(session.country).map(x => ({ label: x.name.slice(0, 100), value: x.nameEn })), session.cityPage);
+    const availableCities = pagedOptions(filterLocations(listCities(session.country), session.cityQuery).map(x => ({ label: x.name.slice(0, 100), value: x.nameEn })), session.cityPage);
     const citiesRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder().setCustomId('adhan_setup_city').setPlaceholder('اختر المدينة')
             .setDisabled(!availableCities.length).addOptions(availableCities.length ? availableCities.map(item => ({ ...item, default: item.value === session.parentCity })) : [{ label: 'اختر الدولة أولاً', value: 'none' }]),
     );
-    const availableAreas = pagedOptions(listAreas(session.parentCity).map(x => ({ label: areaLabel(x).slice(0, 100), value: x.nameEn })), session.areaPage);
+    const availableAreas = pagedOptions(filterLocations(listAreas(session.parentCity), session.areaQuery).map(x => ({ label: areaLabel(x).slice(0, 100), value: x.nameEn })), session.areaPage);
     const areasRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-        new StringSelectMenuBuilder().setCustomId('adhan_setup_area').setPlaceholder('المناطق').setDisabled(!session.parentCity).addOptions(
-            { label: 'مركز المدينة', value: '__center', default: session.city === session.parentCity },
+        new StringSelectMenuBuilder().setCustomId('adhan_setup_area').setPlaceholder('المناطق (اختياري)').setDisabled(!session.parentCity).addOptions(
+            { label: 'بدون منطقة — توقيت المدينة', value: '__center', default: session.city === session.parentCity },
             ...availableAreas.map(item => ({ ...item, default: item.value === session.city })),
         ),
     );
@@ -100,6 +106,7 @@ export function buildAdhanSetupPayload(session: AdhanSetupSession) {
         new ButtonBuilder().setCustomId('adhan_setup_save_zone').setLabel('حفظ المنطقة').setEmoji('💾').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId('adhan_setup_audio').setLabel('إعداد الصوت').setEmoji('🔊').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('adhan_setup_channel_id').setLabel('لصق معرّف القناة').setEmoji('🔢').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('adhan_setup_search').setLabel('بحث').setEmoji('🔍').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId('adhan_setup_cancel').setLabel('إلغاء').setStyle(ButtonStyle.Secondary),
     );
     return { embeds: [embed], components: [channels, countriesRow, citiesRow, areasRow, buttons] };

@@ -25,3 +25,8 @@ export function areaLabel(location: Location) {
     const kind = location.locationType === 'district' ? 'مقاطعة' : location.locationType === 'center' ? 'مركز' : 'جماعة';
     return `${location.name} — ${kind}`;
 }
+export function filterLocations<T extends Location>(items: T[], query = ''): T[] {
+    const normalize = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f\u064b-\u065f\u0670]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').toLocaleLowerCase().trim();
+    const needle = normalize(query);
+    return !needle ? items : items.filter(item => normalize(`${item.name} ${item.nameEn}`).includes(needle));
+}

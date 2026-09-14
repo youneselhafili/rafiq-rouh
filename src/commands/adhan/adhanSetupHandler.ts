@@ -19,6 +19,26 @@ export async function handleAdhanSetupInteraction(interaction: any) {
         return;
     }
 
+    if (interaction.isModalSubmit() && interaction.customId === 'adhan_setup_search_modal') {
+        session.countryQuery = interaction.fields.getTextInputValue('country_query').trim();
+        session.cityQuery = interaction.fields.getTextInputValue('city_query').trim();
+        session.areaQuery = interaction.fields.getTextInputValue('area_query').trim();
+        session.countryPage = 0; session.cityPage = 0; session.areaPage = 0;
+        await interaction.deferUpdate();
+        await interaction.editReply(buildAdhanSetupPayload(session));
+        return;
+    }
+    if (interaction.isButton() && interaction.customId === 'adhan_setup_search') {
+        const modal = new ModalBuilder().setCustomId('adhan_setup_search_modal').setTitle('البحث في القوائم');
+        for (const [id, label, value] of [['country_query', 'اسم الدولة (فارغ لإظهار الكل)', session.countryQuery], ['city_query', 'اسم المدينة (فارغ لإظهار الكل)', session.cityQuery], ['area_query', 'اسم المنطقة (فارغ لإظهار الكل)', session.areaQuery]]) {
+            const input = new TextInputBuilder().setCustomId(id!).setLabel(label!).setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(80);
+            if (value) input.setValue(value);
+            modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+        }
+        await interaction.showModal(modal);
+        return;
+    }
+
     if (interaction.isChannelSelectMenu() && interaction.customId === 'adhan_setup_channel') {
         session.channelId = interaction.values[0];
         await interaction.update(buildAdhanSetupPayload(session));
@@ -53,8 +73,11 @@ export async function handleAdhanSetupInteraction(interaction: any) {
     if (interaction.isStringSelectMenu()) {
         const value = interaction.values[0];
         if (interaction.customId === 'adhan_setup_country') {
-            session.country = value;
-            session.city = undefined; session.parentCity = undefined; session.cityPage = 0; session.areaPage = 0;
+            if (value === '__prev' || value === '__next') session.countryPage = Math.max(0, (session.countryPage || 0) + (value === '__next' ? 1 : -1));
+            else {
+                session.country = value;
+                session.city = undefined; session.parentCity = undefined; session.countryPage = 0; session.cityPage = 0; session.areaPage = 0; session.countryQuery = undefined; session.cityQuery = undefined; session.areaQuery = undefined;
+            }
         } else if (interaction.customId === 'adhan_setup_city' && value !== 'none') {
             if (value === '__prev' || value === '__next') session.cityPage = Math.max(0, Math.min(Math.ceil(listCities(session.country).length / 22) - 1, (session.cityPage || 0) + (value === '__next' ? 1 : -1)));
             else if (listCities(session.country).some(x => x.nameEn === value)) { session.parentCity = value; session.city = value; session.areaPage = 0; }
