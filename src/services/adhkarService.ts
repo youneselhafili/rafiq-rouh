@@ -340,11 +340,12 @@ async function primaryZone(config: AdhkarV2Config, guildId: string): Promise<Man
     // system keeps running on every server instead of silently stopping.
     const fallback = zones.find(zone => zone.enabled);
     if (fallback) {
+        const missingCity = config.primaryZoneCity;
         config.primaryZoneCountry = fallback.country;
         config.primaryZoneCity = fallback.city;
         try {
             await setAdvancedConfig(guildId, ADHKAR_V2_MODULE, config);
-            logger.info(`[Adhkar] Primary zone ${config.primaryZoneCity} was missing; healed to ${fallback.city} for guild ${guildId}.`);
+            logger.info(`[Adhkar] Primary zone ${missingCity} was missing; healed to ${fallback.city} for guild ${guildId}.`);
         } catch (error) {
             logger.warn(`[Adhkar] Could not persist primary zone heal for ${guildId}: ${error instanceof Error ? error.message : String(error)}`);
         }
