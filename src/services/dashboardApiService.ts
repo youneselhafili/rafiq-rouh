@@ -23,6 +23,7 @@ import { getModuleConfig, setModuleConfig } from './guildConfigService';
 import { getAdhkarV2Config, saveAdhkarV2Config } from './adhkarConfigServiceV2';
 import { getJumuahV2Config, saveJumuahV2Config } from './jumuahConfigServiceV2';
 import { getAllAdhkarCategoryNames, getReciters } from './contentService';
+import { getAllReciters as getAllQuranReciters } from '../quran/quranRegistry';
 import { getSalawatV2Config, saveSalawatV2Config, SalawatV2Config } from './salawatConfigServiceV2';
 import { rescheduleSalawatGuild } from './salawatService';
 import { rescheduleAdhkarGuild } from './adhkarService';
@@ -689,56 +690,49 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         json(response, 200, { ok: true }, { 'Set-Cookie': cookie('rafiq_session', '', { clear: true }) });
         return true;
     }
-    // ── Public Quran library endpoints (mirror the bot's reciter catalog) ──
+    // ── Public Quran library endpoints (mirror the bot's full reciter registry) ──
     if (url.pathname === '/api/quran/reciters' && method === 'GET') {
-        const reciters = getReciters();
+        const reciters = getAllQuranReciters();
         json(response, 200, {
             count: reciters.length,
             reciters: reciters.map(reciter => ({
                 id: reciter.id,
                 name: reciter.name,
-                surahs: reciter.moshaf.reduce((sum, moshaf) => sum + moshaf.surah_list.split(',').filter(Boolean).length, 0),
+                category: reciter.category || 'library',
+                surahs: reciter.surahs.length,
             })),
         });
         return true;
     }
     if (url.pathname.startsWith('/api/quran/reciters/') && method === 'GET') {
-        const id = Number(url.pathname.split('/').pop());
-        const reciter = getReciters().find(item => item.id === id);
+        const id = decodeURIComponent(url.pathname.split('/').pop() || '');
+        const reciter = getAllQuranReciters().find(item => item.id === id);
         if (!reciter) { json(response, 404, { error: 'reciter_not_found' }); return true; }
-        const moshafs = reciter.moshaf.map(moshaf => {
-            const numbers = moshaf.surah_list.split(',').map(value => Number(value.trim())).filter(value => value >= 1 && value <= 114);
-            return {
-                id: moshaf.id,
-                name: moshaf.name,
-                server: moshaf.server,
-                surahCount: numbers.length,
-                surahs: numbers.map(n => ({ n, url: `${moshaf.server}${String(n).padStart(3, '0')}.mp3` })),
-            };
-        });
-        json(response, 200, { id: reciter.id, name: reciter.name, moshafs });
+        json(response, 200, { id: reciter.id, name: reciter.name, category: reciter.category || 'library', surahs: reciter.surahs });
         return true;
     }
     if (url.pathname === '/api/quran/file' && method === 'GET') {
-        // Streams a catalog-hosted surah as a download attachment. Only hosts
-        // that appear in the reciters catalog are allowed, so this is not an
+        // Streams a registry-hosted surah as a download attachment. Only hosts
+        // that appear in the reciter registry are allowed, so this is not an
         // open proxy.
         const target = url.searchParams.get('u') || '';
         let parsed: URL;
         try { parsed = new URL(target); } catch { json(response, 400, { error: 'invalid_url' }); return true; }
         if (parsed.protocol !== 'https:') { json(response, 400, { error: 'invalid_protocol' }); return true; }
-        if (!/^\/(?:[A-Za-z0-9_\-]+\/)*\d{3}\.mp3$/.test(parsed.pathname)) { json(response, 400, { error: 'invalid_file' }); return true; }
-        const allowedHosts = new Set(getReciters().flatMap(reciter => reciter.moshaf.map(moshaf => {
-            try { return new URL(moshaf.server).host; } catch { return ''; }
+        if (!/\.mp3$/i.test(parsed.pathname)) { json(response, 400, { error: 'invalid_file' }); return true; }
+        const allowedHosts = new Set(getAllQuranReciters().flatMap(reciter => reciter.surahs.map(surah => {
+            try { return new URL(surah.url).host; } catch { return ''; }
         })));
         if (!allowedHosts.has(parsed.host)) { json(response, 403, { error: 'host_not_allowed' }); return true; }
         try {
             const upstream = await fetch(parsed, { headers: { 'User-Agent': 'RafiqElRouh/1.0' } });
             if (!upstream.ok || !upstream.body) { json(response, 502, { error: 'upstream_failed' }); return true; }
-            const number = (parsed.pathname.match(/(\d{3})\.mp3$/) || [])[1] || '000';
+            const lastSegment = decodeURIComponent(parsed.pathname.split('/').pop() || 'surah.mp3');
+            const digits = lastSegment.match(/\d{1,3}/)?.[0];
+            const filename = digits ? `surah_${digits.padStart(3, '0')}.mp3` : `surah.mp3`;
             response.writeHead(200, {
                 'Content-Type': 'audio/mpeg',
-                'Content-Disposition': `attachment; filename="surah_${number}.mp3"`,
+                'Content-Disposition': `attachment; filename="${filename}"`,
                 'Cache-Control': 'no-store',
             });
             const reader = upstream.body.getReader();
