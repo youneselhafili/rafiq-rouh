@@ -112,7 +112,8 @@ async function sendPersonalAdhkarCategory(client: Client, userId: string, config
     const categories = config.adhkarConfig.categories as Record<string, boolean>;
     if (!config.enabled || categories[categoryKey] !== true || alreadySent(config, eventKey)) return;
     const category = getAllAdhkarCategoryNames().find(item => item.key === categoryKey);
-    const item = getAdhkarByKey(categoryKey)[0];
+    const items = getAdhkarByKey(categoryKey);
+    const item = items.length ? items[Math.floor(Math.random() * items.length)] : undefined;
     if (!category || !item || running.has(`${userId}:${eventKey}`)) return;
     running.add(`${userId}:${eventKey}`);
     try {

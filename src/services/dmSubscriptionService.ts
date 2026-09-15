@@ -137,6 +137,28 @@ export const DEFAULT_DM_CONFIG: UserDMConfig = {
 
 const LEGACY_KEYS = Object.keys(DEFAULT_SUBSCRIPTIONS) as (keyof UserDMSubscriptions)[];
 const ADHKAR_KEYS = Object.keys(DEFAULT_DM_CONFIG.adhkarConfig.categories) as (keyof UserDMConfig['adhkarConfig']['categories'])[];
+// The dashboard stores selections under the catalog's Arabic category keys,
+// while the Discord DM panel still writes the legacy adhkar_* keys. Keep both
+// namespaces in sync with the Arabic key as the source of truth.
+const LEGACY_TO_CATEGORY_KEY: Record<string, string> = {
+    adhkar_sabah: 'أذكار الصباح',
+    adhkar_masa: 'أذكار المساء',
+    adhkar_nawm: 'أذكار النوم',
+    adhkar_istiyqaz: 'أذكار الاستيقاظ',
+    adhkar_wudu: 'أذكار الوضوء',
+    adhkar_adhan: 'أذكار الآذان',
+    adhkar_jumuah: 'أذكار يوم الجمعة',
+};
+
+function reconcileCategoryKeys(categories: Record<string, any>): void {
+    for (const [legacyKey, categoryKey] of Object.entries(LEGACY_TO_CATEGORY_KEY)) {
+        if (categories[categoryKey] === undefined) {
+            if (categories[legacyKey] === true) categories[categoryKey] = true;
+        } else {
+            categories[legacyKey] = categories[categoryKey] === true;
+        }
+    }
+}
 const USERS_DIR = path.join(process.cwd(), 'data', 'users');
 
 interface LocalUserEnvelope {
@@ -235,6 +257,7 @@ function mergeConfig(data: any = {}): UserDMConfig {
 
     merged.adhan = merged.adhanConfig.enabled;
     merged.adhan_zone = merged.city;
+    reconcileCategoryKeys(merged.adhkarConfig.categories as Record<string, any>);
     merged.adhkarConfig.enabled = hasEnabledAdhkarCategory(merged.adhkarConfig.categories);
     for (const key of ADHKAR_KEYS) merged[key] = merged.adhkarConfig.categories[key];
     merged.salawat = merged.salawatConfig.enabled;
@@ -384,19 +407,23 @@ export async function getAllDMUserConfigs(): Promise<Array<{ userId: string; con
     return [...byUser].map(([userId, config]) => ({ userId, config }));
 }
 
-export async function getSubscribedUsers(feature: string, filterZone?: string): Promise<string[]> {
+export async function getSubscribedUsers(feature: string | string[], filterZone?: string): Promise<string[]> {
+    const features = Array.isArray(feature) ? feature : [feature];
     const userIds: string[] = [];
     for (const { userId, config } of await getAllDMUserConfigs()) {
         if (!config.enabled) continue;
         let subscribed = false;
-        if (feature === 'adhan') subscribed = config.adhanConfig.enabled;
-        else if (feature === 'salawat') subscribed = config.salawatConfig.enabled;
-        else if (feature === 'jumuah') subscribed = config.jumuahConfig.enabled;
-        else if (feature in config.adhkarConfig.categories) subscribed = Boolean((config.adhkarConfig.categories as Record<string, boolean>)[feature]);
-        else subscribed = (config as any)[feature] === true;
+        for (const item of features) {
+            if (item === 'adhan') subscribed = config.adhanConfig.enabled;
+            else if (item === 'salawat') subscribed = config.salawatConfig.enabled;
+            else if (item === 'jumuah') subscribed = config.jumuahConfig.enabled;
+            else if (item in config.adhkarConfig.categories) subscribed = Boolean((config.adhkarConfig.categories as Record<string, boolean>)[item]);
+            else subscribed = (config as any)[item] === true;
+            if (subscribed) break;
+        }
 
         if (!subscribed) continue;
-        if (feature === 'adhan' && filterZone && config.city && config.city !== filterZone) continue;
+        if (filterZone && config.city && config.city !== filterZone) continue;
         userIds.push(userId);
     }
     return userIds;

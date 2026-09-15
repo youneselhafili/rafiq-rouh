@@ -25,6 +25,7 @@ import { getJumuahV2Config, saveJumuahV2Config } from './jumuahConfigServiceV2';
 import { getAllAdhkarCategoryNames } from './contentService';
 import { getSalawatV2Config, saveSalawatV2Config, SalawatV2Config } from './salawatConfigServiceV2';
 import { rescheduleSalawatGuild } from './salawatService';
+import { rescheduleAdhkarGuild } from './adhkarService';
 import { calculateNextSalawatRun, validSalawatTimezone } from '../utils/salawatSchedule';
 import { hasEnabledAdhkarCategory } from '../utils/adhkarSelection';
 import { deleteManagedAdhanZone, getManagedAdhanZones, getPrimaryAdhanZone, saveManagedAdhanZone } from './adhanZoneService';
@@ -1176,15 +1177,21 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
                 updatedAt: now,
             });
         }
-        if (adhkarToSave?.categories && typeof adhkarToSave.categories === 'object') {
+        if (adhkarToSave && typeof adhkarToSave === 'object' && ((adhkarToSave as any).categories || typeof (adhkarToSave as any).enabled === 'boolean')) {
             const adhkarConfig = await getAdhkarV2Config(guild.id);
             if (!adhkarConfig) { json(response, 400, { error: 'adhkar_not_configured' }); return true; }
-            const validKeys = new Set(getAllAdhkarCategoryNames().map(category => category.key));
             const categories = { ...adhkarConfig.categories };
-            for (const [key, enabled] of Object.entries(adhkarToSave.categories)) {
-                if (validKeys.has(key)) categories[key] = enabled ? 'enabled' : 'paused';
+            if (adhkarToSave.categories && typeof adhkarToSave.categories === 'object') {
+                const validKeys = new Set(getAllAdhkarCategoryNames().map(category => category.key));
+                for (const [key, enabled] of Object.entries(adhkarToSave.categories)) {
+                    if (validKeys.has(key)) categories[key] = enabled ? 'enabled' : 'paused';
+                }
             }
-            await saveAdhkarV2Config(guild.id, { ...adhkarConfig, categories, updatedBy: session.user.id });
+            const enabled = typeof adhkarToSave.enabled === 'boolean' ? adhkarToSave.enabled : adhkarConfig.enabled;
+            await saveAdhkarV2Config(guild.id, { ...adhkarConfig, enabled, categories, updatedBy: session.user.id });
+            // Gap timers and cron schedules capture config state; rebuild them
+            // so the saved toggles take effect immediately.
+            await rescheduleAdhkarGuild(client, guild.id);
         }
         
         if (rolesToSave) {

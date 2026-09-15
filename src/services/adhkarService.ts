@@ -98,7 +98,8 @@ export function getAdhkarEmoji(type: string): string {
 }
 
 function categoryEnabled(config: AdhkarV2Config, type: string): boolean {
-    return config.enabled && config.categories[type] === 'enabled';
+    // Each category stands alone: the per-category toggle is the only gate.
+    return config.categories[type] === 'enabled';
 }
 
 async function drawItem(guildId: string, type: string, consume = true): Promise<{ item?: AdhkarItem; names?: string[]; namesPage?: number; namesTotalPages?: number }> {
@@ -223,9 +224,10 @@ async function sendFiles(channel: any, type: string, buffers: any[], description
         await channel.send({ content, embeds: [embed], files: attachments.slice(0, 10), allowedMentions: { parse: ['roles'] } });
         for (let index = 10; index < attachments.length; index += 10) await channel.send({ files: attachments.slice(index, index + 10) });
 
-        // Send DMs to specifically subscribed users for this adhkar type
-        const subKey = typeToSubscriptionKey(type);
-        const dmUsers = await getSubscribedUsers(subKey);
+        // Send DMs to specifically subscribed users for this adhkar type.
+        // Check the catalog key (dashboard selections) and the legacy key
+        // (Discord DM panel selections) in a single pass.
+        const dmUsers = await getSubscribedUsers([type, typeToSubscriptionKey(type)]);
         for (const userId of dmUsers) {
             client.users.fetch(userId).then(user => {
                 user.send({ content: `📲 **${getAdhkarTypeName(type)}**`, embeds: [embed], files: attachments.slice(0, 10) }).catch(() => {});
@@ -236,8 +238,7 @@ async function sendFiles(channel: any, type: string, buffers: any[], description
         if (fallbackText) embed.setDescription(`${displayDescription}\n\n${fallbackText}`);
         await channel.send({ content, embeds: [embed], allowedMentions: { parse: ['roles'] } });
 
-        const subKey = typeToSubscriptionKey(type);
-        const dmUsers = await getSubscribedUsers(subKey);
+        const dmUsers = await getSubscribedUsers([type, typeToSubscriptionKey(type)]);
         for (const userId of dmUsers) {
             client.users.fetch(userId).then(user => {
                 user.send({ content: `📲 **${getAdhkarTypeName(type)}**\n${description}\n\n${fallbackText}` }).catch(() => {});
@@ -334,8 +335,11 @@ async function primaryZone(config: AdhkarV2Config, guildId: string): Promise<Man
     return (await getManagedAdhanZones(guildId)).find(zone => zone.country === config.primaryZoneCountry && zone.city === config.primaryZoneCity && zone.enabled) || null;
 }
 
-async function markAndSend(client: Client, guildId: string, config: AdhkarV2Config, eventKey: string, channelId: string, type: string) {
-    if (!categoryEnabled(config, type)) return;
+async function markAndSend(client: Client, guildId: string, config: AdhkarV2Config | null, eventKey: string, channelId: string, type: string) {
+    // Gap timers capture the config when the day is scheduled. Re-read the
+    // saved config so dashboard category changes apply without a restart.
+    const current = (await getAdhkarV2Config(guildId)) || config;
+    if (!current || !categoryEnabled(current, type)) return;
     const lockKey = `${guildId}:${eventKey}`;
     if (pendingEvents.has(lockKey)) return;
     pendingEvents.add(lockKey);
@@ -355,7 +359,7 @@ async function markAndSend(client: Client, guildId: string, config: AdhkarV2Conf
 
 export async function sendPrayerLinkedAdhkar(client: Client, guildId: string, zone: ManagedAdhanZone, prayer: string, kind: 'adhan' | 'wudu' | 'wakeup' | 'sleep') {
     const config = await getAdhkarV2Config(guildId);
-    if (!config || !config.enabled || zone.country !== config.primaryZoneCountry || zone.city !== config.primaryZoneCity) return;
+    if (!config || zone.country !== config.primaryZoneCountry || zone.city !== config.primaryZoneCity) return;
     
     let type = PRAYER_ADHKAR;
     if (kind === 'wudu') type = WUDU_ADHKAR;
@@ -411,7 +415,10 @@ async function nextBalancedCategory(guildId: string, enabled: string[]): Promise
 async function scheduleDaytimeGaps(client: Client, guildId: string, config: AdhkarV2Config, zone: ManagedAdhanZone) {
     const schedule = await fetchZonePrayerSchedule(zone);
     if (!schedule) return;
-    const enabledOther = Object.entries(config.categories).filter(([type, status]) => status === 'enabled' && !SPECIAL_TYPES.has(type)).map(([type]) => type);
+    // Re-read the saved config so category toggles from the dashboard apply
+    // to today's remaining gaps without a restart.
+    const current = (await getAdhkarV2Config(guildId)) || config;
+    const enabledOther = Object.entries(current.categories).filter(([type, status]) => status === 'enabled' && !SPECIAL_TYPES.has(type)).map(([type]) => type);
     if (!enabledOther.length) return;
     const now = moment().tz(zone.timezone);
     const date = now.format('YYYY-MM-DD');
@@ -436,7 +443,7 @@ async function scheduleDaytimeGaps(client: Client, guildId: string, config: Adhk
             await saveRuntime(guildId, runtime);
         }
         const at = moment(plan.at).tz(zone.timezone);
-        const execute = () => markAndSend(client, guildId, config, eventKey, config.generalChannelId, plan.category).catch(() => {});
+        const execute = () => markAndSend(client, guildId, current, eventKey, config.generalChannelId, plan.category).catch(() => {});
         if (now.isSameOrAfter(at) && now.isBefore(end)) await execute();
         else if (at.isAfter(now) && at.isBefore(end)) addTimer(guildId, setTimeout(execute, at.diff(now, 'milliseconds')));
     }
@@ -515,7 +522,10 @@ export function stopAllGuildAdhkarCrons(guildId: string) {
 
 async function scheduleGuild(client: Client, guildId: string, config: AdhkarV2Config) {
     stopAllGuildAdhkarCrons(guildId);
-    if (!config.enabled) return;
+    // Per-category toggles are the only gate; the system is active whenever
+    // at least one category is enabled.
+    const anyEnabled = Object.values(config.categories).some(status => status === 'enabled');
+    if (!anyEnabled) return;
     const zone = await primaryZone(config, guildId);
     if (!zone) {
         await sendAuditLog(client, guildId, { level: 'error', system: 'Adhkar', action: 'Primary adhan zone unavailable', details: 'أوقف نظام الأذكار حتى يتم اختيار منطقة أذان مفعلة.' });
