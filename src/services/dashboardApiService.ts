@@ -735,7 +735,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         try {
             const upstream = await fetch(parsed, { headers: { 'User-Agent': 'RafiqElRouh/1.0' } });
             if (!upstream.ok || !upstream.body) { json(response, 502, { error: 'upstream_failed' }); return true; }
-            const number = parsed.pathname.replace(/\D/g, '');
+            const number = (parsed.pathname.match(/(\d{3})\.mp3$/) || [])[1] || '000';
             response.writeHead(200, {
                 'Content-Type': 'audio/mpeg',
                 'Content-Disposition': `attachment; filename="surah_${number}.mp3"`,
