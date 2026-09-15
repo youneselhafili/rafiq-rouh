@@ -24,6 +24,7 @@ import { getAdhkarV2Config, saveAdhkarV2Config } from './adhkarConfigServiceV2';
 import { getJumuahV2Config, saveJumuahV2Config } from './jumuahConfigServiceV2';
 import { getAllAdhkarCategoryNames, getReciters } from './contentService';
 import { getAllReciters as getAllQuranReciters } from '../quran/quranRegistry';
+import { crc32, zipCentralEntry, zipEOCD, zipLocalHeader, writeDrained } from '../utils/zipStream';
 import { getSalawatV2Config, saveSalawatV2Config, SalawatV2Config } from './salawatConfigServiceV2';
 import { rescheduleSalawatGuild } from './salawatService';
 import { rescheduleAdhkarGuild } from './adhkarService';
@@ -709,6 +710,68 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         const reciter = getAllQuranReciters().find(item => item.id === id);
         if (!reciter) { json(response, 404, { error: 'reciter_not_found' }); return true; }
         json(response, 200, { id: reciter.id, name: reciter.name, category: reciter.category || 'library', surahs: reciter.surahs });
+        return true;
+    }
+    if (url.pathname === '/api/quran/zip' && method === 'GET') {
+        // Streams the reciter's full recitation as one ZIP (STORE method),
+        // named after the reciter, with UTF-8 surah names inside.
+        const id = url.searchParams.get('id') || '';
+        const reciter = getAllQuranReciters().find(item => item.id === id);
+        if (!reciter || !reciter.surahs.length) { json(response, 404, { error: 'reciter_not_found' }); return true; }
+        const zipName = reciter.name.replace(/[\/:*?"<>|]/g, '').trim().slice(0, 80) || 'quran';
+        response.writeHead(200, {
+            'Content-Type': 'application/zip',
+            'Content-Disposition': `attachment; filename="quran_${reciter.id}.zip"; filename*=UTF-8''${encodeURIComponent(`${zipName}.zip`)}`,
+            'Cache-Control': 'no-store',
+        });
+        const entries: Array<{ name: Buffer; crc: number; size: number; offset: number }> = [];
+        const skipped: string[] = [];
+        let offset = 0;
+        try {
+            for (let i = 0; i < reciter.surahs.length; i++) {
+                const surah = reciter.surahs[i];
+                let buf: Buffer | null = null;
+                for (let attempt = 0; attempt < 2 && !buf; attempt++) {
+                    try {
+                        const res = await fetch(surah.url, { headers: { 'User-Agent': 'RafiqElRouh/1.0' } });
+                        if (res.ok && res.body) buf = Buffer.from(await res.arrayBuffer());
+                    } catch { /* retry once, then skip */ }
+                }
+                if (!buf) { skipped.push(surah.name); continue; }
+                const safeName = surah.name.replace(/[\/:*?"<>|]/g, '').trim() || `تسجيل_${i + 1}`;
+                const nameUtf8 = Buffer.from(`${String(i + 1).padStart(3, '0')} - ${safeName}.mp3`, 'utf8');
+                const crc = crc32(buf);
+                const header = zipLocalHeader(nameUtf8, crc, buf.length);
+                await writeDrained(response, header);
+                offset += header.length;
+                await writeDrained(response, buf);
+                offset += buf.length;
+                entries.push({ name: nameUtf8, crc, size: buf.length, offset });
+            }
+            if (skipped.length) {
+                const noteText = `تعذر تحميل هذه التسجيلات:\n${skipped.join('\n')}`;
+                const note = Buffer.from(noteText, 'utf8');
+                const nameUtf8 = Buffer.from('تعذر التحميل.txt', 'utf8');
+                const crc = crc32(note);
+                const header = zipLocalHeader(nameUtf8, crc, note.length);
+                await writeDrained(response, header);
+                offset += header.length;
+                await writeDrained(response, note);
+                offset += note.length;
+                entries.push({ name: nameUtf8, crc, size: note.length, offset });
+            }
+            const cdStart = offset;
+            for (const entry of entries) {
+                const cd = zipCentralEntry(entry.name, entry.crc, entry.size, entry.offset);
+                await writeDrained(response, cd);
+                offset += cd.length;
+            }
+            await writeDrained(response, zipEOCD(entries.length, offset - cdStart, cdStart));
+            response.end();
+        } catch (error) {
+            logger.warn(`[Dashboard API] quran zip failed for ${id}: ${error instanceof Error ? error.message : String(error)}`);
+            response.end();
+        }
         return true;
     }
     if (url.pathname === '/api/quran/file' && method === 'GET') {
