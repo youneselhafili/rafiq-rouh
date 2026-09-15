@@ -727,12 +727,14 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         try {
             const upstream = await fetch(parsed, { headers: { 'User-Agent': 'RafiqElRouh/1.0' } });
             if (!upstream.ok || !upstream.body) { json(response, 502, { error: 'upstream_failed' }); return true; }
-            const lastSegment = decodeURIComponent(parsed.pathname.split('/').pop() || 'surah.mp3');
-            const digits = lastSegment.match(/\d{1,3}/)?.[0];
-            const filename = digits ? `surah_${digits.padStart(3, '0')}.mp3` : `surah.mp3`;
+            const rawName = (url.searchParams.get('name') || '').replace(/[\/:*?"<>|]/g, '').trim().slice(0, 80);
+            const asciiFallback = `surah_${(parsed.pathname.match(/(\d{1,3})\.mp3$/i) || [])[1] || 'rec'}.mp3`;
+            const disposition = rawName
+                ? `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(`${rawName}.mp3`)}`
+                : `attachment; filename="${asciiFallback}"`;
             response.writeHead(200, {
                 'Content-Type': 'audio/mpeg',
-                'Content-Disposition': `attachment; filename="${filename}"`,
+                'Content-Disposition': disposition,
                 'Cache-Control': 'no-store',
             });
             const reader = upstream.body.getReader();
