@@ -703,7 +703,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         return true;
     }
     if (url.pathname.startsWith('/api/quran/reciters/') && method === 'GET') {
-        const id = Number(url.pathname.split('/')[3]);
+        const id = Number(url.pathname.split('/').pop());
         const reciter = getReciters().find(item => item.id === id);
         if (!reciter) { json(response, 404, { error: 'reciter_not_found' }); return true; }
         const moshafs = reciter.moshaf.map(moshaf => {
@@ -727,7 +727,7 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         let parsed: URL;
         try { parsed = new URL(target); } catch { json(response, 400, { error: 'invalid_url' }); return true; }
         if (parsed.protocol !== 'https:') { json(response, 400, { error: 'invalid_protocol' }); return true; }
-        if (!/^\/\d{3}\.mp3$/.test(parsed.pathname)) { json(response, 400, { error: 'invalid_file' }); return true; }
+        if (!/^\/(?:[A-Za-z0-9_\-]+\/)*\d{3}\.mp3$/.test(parsed.pathname)) { json(response, 400, { error: 'invalid_file' }); return true; }
         const allowedHosts = new Set(getReciters().flatMap(reciter => reciter.moshaf.map(moshaf => {
             try { return new URL(moshaf.server).host; } catch { return ''; }
         })));
