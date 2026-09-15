@@ -233,13 +233,22 @@ async function sendPersonalAdhan(client: Client, userId: string, config: UserDMC
                 await user.send(payload);
                 await addDMSentEvent(userId, eventKey);
                 config.runtime = { ...config.runtime, sentEvents: [...(config.runtime?.sentEvents || []), eventKey].slice(-500) };
-                const linkedCategory = event.key === 'adhan' ? 'أذكار الآذان' : event.key === 'prayer_card' ? 'أذكار بعد الصلاة' : null;
-                if (linkedCategory) await sendPersonalAdhkarCategory(client, userId, config, linkedCategory, `${eventKey}:adhkar`);
             } catch (error) {
                 logger.warn(`[DM Scheduler] Failed to send personal adhan to ${userId}: ${String(error)}`);
             } finally {
                 running.delete(`${userId}:${eventKey}`);
             }
+        }
+
+        // Prayer-time adhkar are independent choices: they follow their own
+        // category toggle only, never the adhan notification settings.
+        const adhanAdhkarDiff = now.diff(target, 'minutes');
+        if (adhanAdhkarDiff >= -2 && adhanAdhkarDiff <= 0) {
+            await sendPersonalAdhkarCategory(client, userId, config, 'أذكار الآذان', `${date}:personal_adhan_adhkar:${config.city}:${prayer}`);
+        }
+        const afterPrayerDiff = now.diff(target.clone().add(15, 'minutes'), 'minutes');
+        if (afterPrayerDiff >= -2 && afterPrayerDiff <= 0) {
+            await sendPersonalAdhkarCategory(client, userId, config, 'أذكار بعد الصلاة', `${date}:personal_after_prayer_adhkar:${config.city}:${prayer}`);
         }
 
         // These event-based adhkar are independent choices. They do not require
