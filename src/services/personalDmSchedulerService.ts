@@ -196,7 +196,10 @@ async function sendPersonalSalawat(client: Client, userId: string, config: UserD
     }
 }
 async function sendPersonalAdhan(client: Client, userId: string, config: UserDMConfig) {
-    if (!config.enabled || !config.city) return;
+    // Prayer-linked adhkar (adhan, wudu, wakeup, after-prayer) are part of the
+    // adhan UX: they only reach users who activated prayer notifications.
+    // Regular adhkar keep flowing through sendPersonalScheduledAdhkar.
+    if (!config.enabled || !config.city || !config.adhanConfig.enabled) return;
     const meta = cityMeta(config.city);
     if (!meta) return;
 
@@ -251,8 +254,8 @@ async function sendPersonalAdhan(client: Client, userId: string, config: UserDMC
             await sendPersonalAdhkarCategory(client, userId, config, 'أذكار بعد الصلاة', `${date}:personal_after_prayer_adhkar:${config.city}:${prayer}`);
         }
 
-        // These event-based adhkar are independent choices. They do not require
-        // the user to enable the adhan message itself, only the adhkar category.
+        // Wake-up and wudu adhkar follow prayer times, so they are only sent
+        // while prayer notifications are enabled (checked at the top).
         if (prayer === 'Fajr') {
             const wakeupDiff = now.diff(target.clone().subtract(30, 'minutes'), 'minutes');
             if (wakeupDiff >= 0 && wakeupDiff <= 1) {
