@@ -741,12 +741,13 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
                 const safeName = surah.name.replace(/[\/:*?"<>|]/g, '').trim() || `تسجيل_${i + 1}`;
                 const nameUtf8 = Buffer.from(`${String(i + 1).padStart(3, '0')} - ${safeName}.mp3`, 'utf8');
                 const crc = crc32(buf);
+                const entryOffset = offset;
                 const header = zipLocalHeader(nameUtf8, crc, buf.length);
                 await writeDrained(response, header);
                 offset += header.length;
                 await writeDrained(response, buf);
                 offset += buf.length;
-                entries.push({ name: nameUtf8, crc, size: buf.length, offset });
+                entries.push({ name: nameUtf8, crc, size: buf.length, offset: entryOffset });
             }
             if (skipped.length) {
                 const noteText = `تعذر تحميل هذه التسجيلات:\n${skipped.join('\n')}`;
