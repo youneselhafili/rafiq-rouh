@@ -5,7 +5,7 @@ import { AdhkarItem } from '../types';
 import { BOT_FOOTER, COLORS, PRAYER_KEYS, PRAYER_NAMES } from '../utils/constants';
 import { getAdhkarByKey, getAdhkarCategory, getAllAdhkarCategoryNames } from './contentService';
 import { generateAdaptiveAdhkarImages, generateNamesGridImage } from './adhkarImageService';
-import { AdhkarV2Config, getAdhkarV2Config, getAllAdhkarV2Guilds } from './adhkarConfigServiceV2';
+import { AdhkarV2Config, getAdhkarV2Config, getAllAdhkarV2Guilds, MODULE as ADHKAR_V2_MODULE } from './adhkarConfigServiceV2';
 import { getAdvancedConfig, setAdvancedConfig } from './advancedConfigService';
 import { getManagedAdhanZones, ManagedAdhanZone } from './adhanZoneService';
 import { fetchZonePrayerSchedule } from './adhanService';
@@ -332,7 +332,24 @@ export async function buildAdhkarPreview(guildId: string, type: string): Promise
 }
 
 async function primaryZone(config: AdhkarV2Config, guildId: string): Promise<ManagedAdhanZone | null> {
-    return (await getManagedAdhanZones(guildId)).find(zone => zone.country === config.primaryZoneCountry && zone.city === config.primaryZoneCity && zone.enabled) || null;
+    const zones = await getManagedAdhanZones(guildId);
+    const configured = zones.find(zone => zone.country === config.primaryZoneCountry && zone.city === config.primaryZoneCity && zone.enabled);
+    if (configured) return configured;
+    // The configured reference zone may have been deleted, renamed or disabled.
+    // Fall back to the first enabled zone and persist the heal, so the adhkar
+    // system keeps running on every server instead of silently stopping.
+    const fallback = zones.find(zone => zone.enabled);
+    if (fallback) {
+        config.primaryZoneCountry = fallback.country;
+        config.primaryZoneCity = fallback.city;
+        try {
+            await setAdvancedConfig(guildId, ADHKAR_V2_MODULE, config);
+            logger.info(`[Adhkar] Primary zone ${config.primaryZoneCity} was missing; healed to ${fallback.city} for guild ${guildId}.`);
+        } catch (error) {
+            logger.warn(`[Adhkar] Could not persist primary zone heal for ${guildId}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    return fallback || null;
 }
 
 async function markAndSend(client: Client, guildId: string, config: AdhkarV2Config | null, eventKey: string, channelId: string, type: string) {

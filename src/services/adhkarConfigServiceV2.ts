@@ -16,7 +16,7 @@ export interface AdhkarV2Config {
     updatedBy?: string;
 }
 
-const MODULE = 'adhkarV2';
+export const MODULE = 'adhkarV2';
 const FRIDAY_ADHKAR = 'أذكار يوم الجمعة';
 // Firestore reserves field names beginning and ending with double underscores.
 const LEGACY_MARKER = '__adhkar_v2__';
