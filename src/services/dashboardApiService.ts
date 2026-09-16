@@ -712,6 +712,15 @@ async function apiRequest(client: Client, request: IncomingMessage, response: Se
         json(response, 200, { id: reciter.id, name: reciter.name, category: reciter.category || 'library', surahs: reciter.surahs });
         return true;
     }
+    if (url.pathname === '/api/quran/all-tracks' && method === 'GET') {
+        // One-shot list of every reciter's tracks (night mode "all" option).
+        const reciters = getAllQuranReciters();
+        json(response, 200, {
+            count: reciters.reduce((sum, r) => sum + r.surahs.length, 0),
+            tracks: reciters.flatMap(r => r.surahs.map(s => ({ name: s.name, url: s.url, reciter: r.name }))),
+        });
+        return true;
+    }
     if (url.pathname === '/api/quran/zip' && method === 'GET') {
         // Streams the reciter's full recitation as one ZIP (STORE method),
         // named after the reciter, with UTF-8 surah names inside.
